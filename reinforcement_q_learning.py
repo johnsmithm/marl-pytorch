@@ -126,7 +126,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+                        ('state', 'action', 'next_state', 'reward', 'agent_index'))
 
 
 class ReplayMemory(object):
@@ -258,14 +258,17 @@ class DQN(nn.Module):
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
         linear_input_size = convw * convh * 32
         self.head = nn.Linear(linear_input_size, 8) # 448 or 512
+        
+        self.agent_lookup = nn.Embedding(2, linear_input_size)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    def forward(self, x):
+    def forward(self, x, agent_index):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        return self.head(x.view(x.size(0), -1))
+        z_a = self.agent_lookup(agent_index)
+        return self.head(x.view(x.size(0), -1)+z_a)
 
 
 # Input extraction
@@ -365,7 +368,7 @@ if True:
     memory = None
     policy_net, target_net, optimizer = [None]*3
 
-def select_action(state):
+def select_action(state, id):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) *         math.exp(-1. * steps_done / EPS_DECAY)
@@ -375,7 +378,7 @@ def select_action(state):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            return policy_net(state).max(1)[1].view(1, 1)
+            return policy_net(state, torch.tensor([id], device=device)).max(1)[1].view(1, 1)
     else:
         return torch.tensor([[random.randrange(8)]], device=device, dtype=torch.long)
 
@@ -443,11 +446,12 @@ def optimize_model():
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
+    agent_index = torch.cat(batch.agent_index)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
+    state_action_values = policy_net(state_batch, agent_index).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
@@ -455,7 +459,7 @@ def optimize_model():
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+    next_state_values[non_final_mask] = target_net(non_final_next_states, agent_index).max(1)[0].detach()
     # Compute the expected Q values
     #print(next_state_values, reward_batch)
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch.float()
@@ -520,7 +524,7 @@ def save_episode_and_reward_to_csv(file, writer, e, r, ep):
     data ['a']=[i[1] for i in ep]
     data ['r']=[i[2] for i in ep]
     #print(data ['r'])
-    data['rewardT'] = sum(data ['r'])
+    data['rewardT'] =r# sum(data ['r'])
     #episode.step_records[step].r_t
     with open(os.path.join(pars['results_path'],'ep:{}.json').format(e), 'w') as outfile:
         json.dump(data, outfile)
@@ -577,28 +581,25 @@ def main(pars):
         buf= []; retime=[]; ep1=[]
         for t in range(pars['epsteps']):# count():
             # Select and perform an action
-            action = select_action(state)
+            action1 = select_action(state, 0)
             #_, reward, done, _ = env.step(action.item())
-            action2 = np.random.randint(8)
-            reward, r2 = env.move(action.item(), action2)
-            rt+=reward;ac.append(str(action.item()))
+            action2 = select_action(state, 1)
+            reward1, reward2 = env.move(action1.item(), action2.item())
+            rt+=reward1+reward2;
+            ac.append(str(action1.item()))
 
-            ep1.append([env.render_env(), action.item(), reward])
-            reward = torch.tensor([reward], device=device)
+            #ep1.append([env.render_env(), action.item(), reward])
+            reward1 = torch.tensor([reward1], device=device)
+            reward2 = torch.tensor([reward2], device=device)
+            id1 = torch.tensor([0], device=device)
+            id2 = torch.tensor([1], device=device)
 
-            # Observe new state
-            if False:
-                last_screen = current_screen
-                current_screen = get_screen()
-                if not done:
-                    next_state = current_screen - last_screen
-                else:
-                    next_state = None
             retime.append(0)#reward)
             # Store the transition in memory
             #memory.push(state, action, next_state, reward)
             next_state = get_screen()#
-            buf.append([state, action, next_state, reward])
+            buf.append([state, action1, next_state, reward1, id1])
+            buf.append([state, action2, next_state, reward2, id2])
             # Move to the next state
             state = next_state
 
@@ -609,12 +610,12 @@ def main(pars):
                 plot_durations()
                 break
         
-        for i,it in enumerate(buf[:-nrf]):
-            memory.push(it[0], it[1], it[2], it[3]+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
-        if rt>5:
+        for i,it in enumerate(buf[:]):
+            memory.push(it[0], it[1], it[2], it[3], it[4])#+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
+        if rt>5 and False:
             for j in range(3):
-                for i,it in enumerate(buf[:-nrf]):
-                    memory.push(it[0], it[1], it[2], it[3]+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
+                for i,it in enumerate(buf[:]):
+                    memory.push(it[0], it[1], it[2], it[3], it[4])#+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
         print('ep',i_episode, 'reward train',rt, 'time', time.time() - start_time, ','.join(ac[:20]))
         if i_episode%pars['show']==0:
             ep = []
@@ -623,13 +624,14 @@ def main(pars):
             for t in range(pars['epsteps']):# count():
                 # Select and perform an action
                 state = get_screen()
-                action = policy_net(state).max(1)[1].view(1, 1)
+                action1 = policy_net(state, torch.tensor([0], device=device)).max(1)[1].view(1, 1)
+                action2 = policy_net(state, torch.tensor([1], device=device)).max(1)[1].view(1, 1)
                 #_, reward, done, _ = env.step(action.item())
-                action2 = np.random.randint(8)
-                reward, r2 = env.move(action.item(), action2)
-                ep.append([env.render_env(), action.item(), reward])
+                #action2 = np.random.randint(8)
+                reward1, reward2 = env.move(action1.item(), action2.item())
+                ep.append([env.render_env(), [action1.item(), action2.item()], [reward1, reward2]])
                 #print(env.render_env().shape)
-                rt1+=reward;
+                rt1+=reward1+reward2;
             save_episode_and_reward_to_csv(result_out, writer, i_episode, rt1, ep)
             print( 'reward test', rt1)
         # Update the target network, copying all weights and biases in DQN
