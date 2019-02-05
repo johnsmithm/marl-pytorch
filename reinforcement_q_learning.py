@@ -87,10 +87,8 @@ import argparse, shutil
 
 from mas import *
 
-env = GameEnv()
-env.reset()
 
-temp = env.render_env()
+
 
 #env = gym.make('CartPole-v0').unwrapped
 
@@ -144,15 +142,16 @@ class ReplayMemory(object):
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        if np.random.rand()>0.05:
+        if np.random.rand()>0.8:
             self.memory = self.memory[-self.capacity:]
+        #return random.sample(self.memory, batch_size)
         x = random.sample(self.memory, batch_size//2)
         x1 = []
         i = np.random.randint(max(0,len(self.memory)-batch_size*2))
         n = 0
         while len(x1)<batch_size//2 and i<len(self.memory) and n<100:
             n+=1
-            if self.memory[i].reward>0:
+            if self.memory[i].reward>0.001:
                 x1.append(self.memory[i])
             i+=1   
         i = np.random.randint(max(0,len(self.memory)-batch_size*2))
@@ -243,32 +242,34 @@ class DQN(nn.Module):
 
     def __init__(self, h, w):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(3, 36, kernel_size=5, stride=2)
+        self.bn1 = nn.BatchNorm2d(36)
+        self.conv2 = nn.Conv2d(36, 62, kernel_size=3, stride=2)
+        self.bn2 = nn.BatchNorm2d(62)
+        self.conv3 = nn.Conv2d(62, 62, kernel_size=2, stride=2)
+        self.bn3 = nn.BatchNorm2d(62)
 
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
         def conv2d_size_out(size, kernel_size = 5, stride = 2):
             return (size - (kernel_size - 1) - 1) // stride  + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
-        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
-        linear_input_size = convw * convh * 32
-        self.head = nn.Linear(linear_input_size, 8) # 448 or 512
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)),3)
+        linear_input_size = 5022# convw * convh * 62
+        self.head = nn.Linear(linear_input_size, 4) # 448 or 512
         
-        self.agent_lookup = nn.Embedding(2, linear_input_size)
+        #self.agent_lookup = nn.Embedding(2, 16)
+        #self.agent_lookup1 = nn.Embedding(2, 32)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x, agent_index):
-        x = F.relu(self.bn1(self.conv1(x)))
+        #z_a = self.agent_lookup(agent_index)
+        #z_a1 = self.agent_lookup1(agent_index)
+        x = F.relu(self.bn1(self.conv1(x)))#+z_a.view(-1,16,1,1))
         x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))
-        z_a = self.agent_lookup(agent_index)
-        return self.head(x.view(x.size(0), -1)+z_a)
+        x = F.relu(self.bn3(self.conv3(x)))#+z_a1.view(-1,32,1,1))
+        return self.head(x.view(x.size(0), -1))
 
 
 # Input extraction
@@ -321,11 +322,6 @@ def get_screen():
     # Resize, and add a batch dimension (BCHW)
     return screen.unsqueeze(0).to(device)
 
-
-env.reset()
-
-e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
-print(e.shape, np.amax(e), np.amin(e))
 #plt.show()
 
 
@@ -367,8 +363,17 @@ if True:
     steps_done = 0
     memory = None
     policy_net, target_net, optimizer = [None]*3
+    
+from numpy.random import choice
+def takeAc(state, id, policy_net):
+    return policy_net(state, torch.tensor([id], device=device)).max(1)[1].view(1, 1)
+    v = policy_net(state, torch.tensor([id], device=device)).softmax(-1).cpu().data.numpy()
+    
+    draw = choice(range(4),
+              p=v[0])
+    return torch.tensor([draw], device=device).view(1, 1)
 
-def select_action(state, id):
+def select_action(state, id, policy_net):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) *         math.exp(-1. * steps_done / EPS_DECAY)
@@ -378,9 +383,10 @@ def select_action(state, id):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
+            return takeAc(state, id, policy_net)
             return policy_net(state, torch.tensor([id], device=device)).max(1)[1].view(1, 1)
     else:
-        return torch.tensor([[random.randrange(8)]], device=device, dtype=torch.long)
+        return torch.tensor([[random.randrange(4)]], device=device, dtype=torch.long)
 
 
 episode_durations = []
@@ -428,7 +434,7 @@ def plot_durations():
 # In[23]:
 
 
-def optimize_model():
+def optimize_model(memory, policy_net, target_net, optimizer):
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
@@ -447,6 +453,7 @@ def optimize_model():
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
     agent_index = torch.cat(batch.agent_index)
+    #print(agent_index.cpu().data.numpy()[0])
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
@@ -505,8 +512,11 @@ def getA():
                 help='file to load the db state', default=10, type=int)
     parser.add_argument('--nrf', dest='nrf',
                 help='file to load the db state', default=10, type=int)
+    parser.add_argument('--subhid', dest='subhid',
+                help='file to load the db state', default=0.6, type=float)
     
     parser.add_argument('-r', '--results_path', type=str, help='path to results directory', default='logs/t3')
+    parser.add_argument('-c', '--comment', type=str, help='path to results directory', default='')
     args = parser.parse_args()
     
     return args
@@ -532,6 +542,13 @@ def save_episode_and_reward_to_csv(file, writer, e, r, ep):
     writer.writerow({'episode': e, 'reward': r})
     file.flush()
 
+def mark(st):
+    return st
+    s1 = st.clone()
+    s1[:,1] -= 0.3
+    s1[:,0] *= 0.3
+    return s1
+
 def main(pars):
     global memory, BATCH_SIZE, TARGET_UPDATE, policy_net, target_net, optimizer
     BATCH_SIZE = pars['bs']
@@ -548,13 +565,21 @@ def main(pars):
     init_screen = get_screen()
     _, _, screen_height, screen_width = init_screen.shape
 
-    policy_net = DQN(screen_height, screen_width).to(device)
-    target_net = DQN(screen_height, screen_width).to(device)
-    target_net.load_state_dict(policy_net.state_dict())
-    target_net.eval()
+    policy_net1 = DQN(screen_height, screen_width).to(device)
+    target_net1 = DQN(screen_height, screen_width).to(device)
+    target_net1.load_state_dict(policy_net1.state_dict())
+    target_net1.eval()
+    
+    
+    policy_net2 = DQN(screen_height, screen_width).to(device)
+    target_net2 = DQN(screen_height, screen_width).to(device)
+    target_net2.load_state_dict(policy_net2.state_dict())
+    target_net2.eval()
     #RMSprop
-    optimizer = optim.Adam(policy_net.parameters())
-    memory = ReplayMemory(10000)
+    optimizer1 = optim.Adam(policy_net1.parameters())
+    memory1 = ReplayMemory(10000)
+    optimizer2 = optim.Adam(policy_net2.parameters())
+    memory2 = ReplayMemory(10000)
 
     if args.results_path:
         if not os.path.exists(args.results_path):
@@ -578,12 +603,12 @@ def main(pars):
         state = get_screen()# current_screen - last_screen
         rt = 0; ac=[]
         start_time = time.time()
-        buf= []; retime=[]; ep1=[]
+        buf1= [];buf2= []; retime=[]; ep1=[]
         for t in range(pars['epsteps']):# count():
             # Select and perform an action
-            action1 = select_action(state, 0)
+            action1 = select_action(mark(state), 0, policy_net1)
             #_, reward, done, _ = env.step(action.item())
-            action2 = select_action(state, 1)
+            action2 = select_action(state, 1, policy_net2)
             reward1, reward2 = env.move(action1.item(), action2.item())
             rt+=reward1+reward2;
             ac.append(str(action1.item()))
@@ -598,20 +623,23 @@ def main(pars):
             # Store the transition in memory
             #memory.push(state, action, next_state, reward)
             next_state = get_screen()#
-            buf.append([state, action1, next_state, reward1, id1])
-            buf.append([state, action2, next_state, reward2, id2])
+            buf1.append([mark(state), action1, next_state, reward1, id1])
+            buf2.append([state, action2, next_state, reward2, id2])
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the target network)
-            optimize_model()
+            optimize_model(memory1, policy_net1, target_net1, optimizer1)
+            optimize_model(memory2, policy_net2, target_net2, optimizer2)
             if done:
                 episode_durations.append(t + 1)
                 plot_durations()
                 break
         
-        for i,it in enumerate(buf[:]):
-            memory.push(it[0], it[1], it[2], it[3], it[4])#+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
+        for i,it in enumerate(buf1[:]):
+            memory1.push(it[0], it[1], it[2], it[3], it[4])#+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
+        for i,it in enumerate(buf2[:]):
+            memory2.push(it[0], it[1], it[2], it[3], it[4])#+sum(retime[i+1:i+nrf])/len(retime[i+1:i+nrf]))
         if rt>5 and False:
             for j in range(3):
                 for i,it in enumerate(buf[:]):
@@ -624,8 +652,8 @@ def main(pars):
             for t in range(pars['epsteps']):# count():
                 # Select and perform an action
                 state = get_screen()
-                action1 = policy_net(state, torch.tensor([0], device=device)).max(1)[1].view(1, 1)
-                action2 = policy_net(state, torch.tensor([1], device=device)).max(1)[1].view(1, 1)
+                action1 = takeAc(mark(state), 0, policy_net1)# policy_net(mark(state), torch.tensor([0], device=device)).max(1)[1].view(1, 1)
+                action2 = takeAc(state, 1, policy_net2)#policy_net(state, torch.tensor([1], device=device)).max(1)[1].view(1, 1)
                 #_, reward, done, _ = env.step(action.item())
                 #action2 = np.random.randint(8)
                 reward1, reward2 = env.move(action1.item(), action2.item())
@@ -636,7 +664,8 @@ def main(pars):
             print( 'reward test', rt1)
         # Update the target network, copying all weights and biases in DQN
         if i_episode % TARGET_UPDATE == 0:
-            target_net.load_state_dict(policy_net.state_dict())
+            target_net1.load_state_dict(policy_net1.state_dict())
+            target_net2.load_state_dict(policy_net2.state_dict())
     result_out.close()
     print('Complete')
 
@@ -655,9 +684,30 @@ def main(pars):
 # 
 # 
 
+'''
+todo:
+- use random action based on action distributin: softmax->random -> not working - made small/noise steps toward the goal
+- separate policies - done working
+- gradient policy
+- use messages which aproximetes the other value function
+- a2c
+- curiosity
+
+-- save git commit key as param 
+'''
+
 if __name__ == '__main__': 
 
     args = getA()
     pars = vars(args)    
     print(pars)
+    
+    env = GameEnv(pars['subhid'])
+    env.reset()
+
+    temp = env.render_env()
+    env.reset()
+
+    e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
+    print(e.shape, np.amax(e), np.amin(e))
     main(pars)

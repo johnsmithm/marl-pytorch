@@ -140,12 +140,13 @@ class FoodObj:
 
 
 class GameEnv:
-    def __init__(self, widht=31, hight=11, agent_hidden=5, food_hidden=4):
+    def __init__(self, subhid=0.5, widht=31, hight=11, agent_hidden=5, food_hidden=4):
         self.size_x = widht
         self.size_y = hight
         self.objects = []
         self.agent_hidden = agent_hidden
         self.food_hidden = food_hidden
+        self.subhid=subhid
 
         # 0: forward, 1: backward, 2: left, 3: right
         # 4: trun lelf, 5:turn right, 6: beam, 7: stay
@@ -202,7 +203,7 @@ class GameEnv:
         agent1_reward = 0
         agent2_reward = 0
         for food in self.food_objects:
-            if food.is_hidden() and np.random.rand()<0.6:
+            if food.is_hidden() and np.random.rand()<self.subhid:
                 food.sub_hidden()
             if not food.is_hidden():
                 if not self.agent1.is_hidden() and food.x == self.agent1.x and food.y == self.agent1.y:
