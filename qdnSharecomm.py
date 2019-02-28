@@ -708,6 +708,8 @@ def main(pars, callback=None):
                 #print(env.render_env().shape)
                 rt1+=reward1+reward2;
             job.log({'reward':rt1,'ep':i_episode})
+            experiment.set_step(i_episode)
+            experiment.log_metric("reward", rt1)
             policy_net.train()
             save_episode_and_reward_to_csv(result_out, writer, i_episode, rt1, ep)
             print( 'reward test', rt1)
@@ -767,6 +769,11 @@ if __name__ == '__main__':
         pars['results_path'] += pars['name']
         #pars['results_path'] += pars['name']
         env = None
+        experiment = Experiment(api_key="ubnNI8IwcycXWmKD7eT7YlP4J", auto_output_logging=None,auto_metric_logging=False,
+                        disabled=pars['debug'] == '1',
+                        project_name="general", workspace="ionmosnoi")
+        
+        experiment.log_parameters(pars)
 
         #temp = env.render_env()
         #env.reset()
@@ -774,7 +781,7 @@ if __name__ == '__main__':
         #e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
         #print(e.shape, np.amax(e), np.amin(e))
         job.setName(pars['name'])
-        if pars['debug'] == '1':
+        if True or pars['debug'] == '1':
             job.debug()
         main(pars)
     else:
