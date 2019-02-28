@@ -20,13 +20,14 @@ class AgentObj:
         self.mark = mark
 
     def is_hidden(self):
+        return False
         return self.hidden > 0
 
     def add_mark(self, agent_hidden):
         self.mark += 1
         if self.mark >= 2:
             self.mark = 0
-            self.hidden = agent_hidden
+            #self.hidden = agent_hidden
         return self.mark
 
     def sub_hidden(self):
@@ -180,8 +181,8 @@ class GameEnv:
         agent1_old_x, agent1_old_y = self.agent1.x, self.agent1.y
         agent2_old_x, agent2_old_y = self.agent2.x, self.agent2.y
 
-        self.agent1.sub_hidden()
-        self.agent2.sub_hidden()
+        #self.agent1.sub_hidden()
+        #self.agent2.sub_hidden()
 
         self.agent1_beam_set = []
         self.agent2_beam_set = []
@@ -218,7 +219,7 @@ class GameEnv:
 
         return agent1_reward, agent2_reward
 
-    def contribute_metrix(self):
+    def contribute_metrix(self, ag=None):
         a = np.ones([self.size_y + 2, self.size_x + 2, 3])
         a[1:-1, 1:-1, :] = 0
 
@@ -237,31 +238,54 @@ class GameEnv:
                     a[food.y + 1, food.x + 1, i] = 1 if i == food.type else 0
 
         for i in range(3):
-            if not self.agent1.is_hidden():
+            if not self.agent1.is_hidden() or True:
                 delta_x, delta_y = self.agent1.move_forward_delta()
                 a[self.agent1.y + 1 + delta_y, self.agent1.x + 1 + delta_x, i] = 0.5
-            if not self.agent2.is_hidden():
+            if not self.agent2.is_hidden() or True:
                 delta_x, delta_y = self.agent2.move_forward_delta()
                 a[self.agent2.y + 1 + delta_y, self.agent2.x + 1 + delta_x, i] = 0.5
-            if not self.agent1.is_hidden():
-                a[self.agent1.y + 1, self.agent1.x + 1, i] = 1 if i == self.agent1.type else 0
-            if not self.agent2.is_hidden():
-                a[self.agent2.y + 1, self.agent2.x + 1, i] = 1 if i == self.agent2.type else 0
-
+            if not self.agent1.is_hidden() or True:
+                if ag is not None and ag==1 and True:
+                    a[self.agent1.y + 1, self.agent1.x + 1, i] = 1 if i == self.agent2.type else 0
+                else:
+                    a[self.agent1.y + 1, self.agent1.x + 1, i] = 1 if i == self.agent1.type else 0
+            if not self.agent2.is_hidden() or True:
+                if ag is not None and ag==1 and True:
+                    a[self.agent2.y + 1, self.agent2.x + 1, i] = 1 if i == self.agent1.type else 0
+                else:
+                    a[self.agent2.y + 1, self.agent2.x + 1, i] = 1 if i == self.agent2.type else 0
+                
+            #0 and 2
+            if ag is not None and i == 1 and False:
+                if ag == 0:
+                    a[self.agent1.y + 1, self.agent1.x + 1, i] = 1
+                else:
+                    a[self.agent2.y + 1, self.agent2.x + 1, i] = 1
+            #print(self.agent1.is_hidden(),self.agent2.is_hidden(), self.agent2.y + 1, self.agent2.x + 1, self.agent1.y + 1, self.agent1.x + 1)
+            if ag is not None and ag==1 and False:
+                a[:,:,0] += a[:,:,2]
+                a[:,:,2] = a[:,:,0] - a[:,:,2] 
+                a[:,:,0] = a[:,:,0] - a[:,:,2] 
+                #a[0,0]=1
+                #print(1)
+            #print(a[:,-10:,0])
+            #print(11)
+        if ag is not None and ag==1 and True:
+                return  a[::-1,::-1,:]
         return a
 
-    def render_env(self):
-        a = self.contribute_metrix()
+    def render_env(self, ag=None):
+        a = self.contribute_metrix(ag=ag)
         sc = 1
-        b = scipy.misc.imresize(a[:, :, 0], [sc * self.size_y, sc * self.size_x, 1], interp='nearest')
-        c = scipy.misc.imresize(a[:, :, 1], [sc * self.size_y, sc * self.size_x, 1], interp='nearest')
-        d = scipy.misc.imresize(a[:, :, 2], [sc * self.size_y, sc * self.size_x, 1], interp='nearest')
+        b = scipy.misc.imresize(a[:, :, 0], [sc * self.size_y, sc * self.size_x, 1], interp='cubic')
+        c = scipy.misc.imresize(a[:, :, 1], [sc * self.size_y, sc * self.size_x, 1], interp='cubic')
+        d = scipy.misc.imresize(a[:, :, 2], [sc * self.size_y, sc * self.size_x, 1], interp='cubic')
 
-        a = np.stack([b, c, d], axis=2)
+        #a = np.stack([b, c, d], axis=2)
         return a
 
-    def train_render(self):
-        a = self.contribute_metrix()
+    def train_render(self, ag=None):
+        a = self.contribute_metrix(ag)
 
         b = scipy.misc.imresize(a[:, :, 0], [84, 84, 1], interp='nearest')
         c = scipy.misc.imresize(a[:, :, 1], [84, 84, 1], interp='nearest')
