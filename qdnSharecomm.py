@@ -4,7 +4,7 @@
 # In[3]:
 
 
-
+from comet_ml import Experiment
 
 # 
 # Reinforcement Learning (DQN) Tutorial
@@ -27,6 +27,7 @@
 # 
 #    cartpole
 # 
+
 # As the agent observes the current state of the environment and chooses
 # an action, the environment *transitions* to a new state, and also
 # returns a reward that indicates the consequences of the action. In this
@@ -781,7 +782,7 @@ if __name__ == '__main__':
         #e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
         #print(e.shape, np.amax(e), np.amin(e))
         job.setName(pars['name'])
-        if True or pars['debug'] == '1':
+        if False and pars['debug'] == '1':
             job.debug()
         main(pars)
     else:
