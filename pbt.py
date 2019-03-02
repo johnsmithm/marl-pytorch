@@ -214,14 +214,14 @@ class Agent:
     
     def getaction(self, state1, state2, test=False):
         mes = torch.tensor([[0,0,0,0]], device=self.device)
+        comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+        comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
         if test:
-            comm1 = comm2 = mes
+            action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
+            action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else:
-            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
-            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
-        
-        action1 = self.select_action(state1, comm2)
-        action2 = self.select_action(state2,  comm1)
+            action1 = self.select_action(state1, comm2)
+            action2 = self.select_action(state2,  comm1)
         return action1, action2, [comm1, comm2]
     def getStates(self, env):
         screen1 = env.render_env_1d(0)#.transpose((2, 0, 1))
