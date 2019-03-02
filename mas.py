@@ -20,14 +20,14 @@ class AgentObj:
         self.mark = mark
 
     def is_hidden(self):
-        return False
+        #return False
         return self.hidden > 0
 
     def add_mark(self, agent_hidden):
         self.mark += 1
         if self.mark >= 2:
             self.mark = 0
-            #self.hidden = agent_hidden
+            self.hidden = agent_hidden
         return self.mark
 
     def sub_hidden(self):
@@ -274,6 +274,15 @@ class GameEnv:
                 return  a[::-1,::-1,:]
         return a
 
+    def render_env_1d(self, ag=None):
+        a = []
+        if ag is not None and ag==1:
+            a.extend([self.agent2.y , self.agent2.x, self.agent1.y , self.agent1.x])
+        else:            
+            a.extend([self.agent1.y , self.agent1.x, self.agent2.y , self.agent2.x])
+        for food in self.food_objects:
+            a.extend([food.y , food.x , 1 if food.is_hidden() else 0] )
+        return np.array(a)
     def render_env(self, ag=None):
         a = self.contribute_metrix(ag=ag)
         sc = 1

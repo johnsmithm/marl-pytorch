@@ -4,6 +4,7 @@
 # In[3]:
 
 
+from comet_ml import Experiment
 
 
 # 
@@ -147,14 +148,14 @@ class ReplayMemory(object):
         #return random.sample(self.memory, batch_size)
         x = random.sample(self.memory, batch_size//2)
         x1 = []
-        i = np.random.randint(max(0,len(self.memory)-batch_size*2))
+        i = np.random.randint(max(0,len(self.memory)-batch_size*2))if batch_size*3<len(self.memory)else 1
         n = 0
         while len(x1)<batch_size//2 and i<len(self.memory) and n<100:
             n+=1
             if self.memory[i].reward>0.001:
                 x1.append(self.memory[i])
             i+=1   
-        i = np.random.randint(max(0,len(self.memory)-batch_size*2))
+        i = np.random.randint(max(0,len(self.memory)-batch_size*2))if batch_size*3<len(self.memory)else 1
         while len(x1)<batch_size//2 :
                 x1.append(self.memory[i])
                 i+=1
@@ -514,9 +515,13 @@ def getA():
                 help='file to load the db state', default=10, type=int)
     parser.add_argument('--subhid', dest='subhid',
                 help='file to load the db state', default=0.6, type=float)
+    parser.add_argument('--alpha', dest='alpha',
+                help='file to load the db state', default=1, type=float)
     
     parser.add_argument('-r', '--results_path', type=str, help='path to results directory', default='logs/t3')
     parser.add_argument('-c', '--comment', type=str, help='path to results directory', default='')
+    parser.add_argument('-n', '--name', type=str, help='path to results directory', default='t3')
+    parser.add_argument('-d', '--debug', type=str, help='path to results directory', default='0')
     args = parser.parse_args()
     
     return args
@@ -549,13 +554,19 @@ def mark(st):
     s1[:,0] *= 0.3
     return s1
 
-def main(pars):
-    global memory, BATCH_SIZE, TARGET_UPDATE, policy_net, target_net, optimizer
+from htuneml1 import Job
+job = Job('5c61b674203efd001a65d4b1')
+
+@job.monitor
+def main(pars, callback=None):
+    global memory, BATCH_SIZE, TARGET_UPDATE, policy_net, target_net, optimizer, env
+    env = GameEnv(pars['subhid'])
+    env.reset()
     BATCH_SIZE = pars['bs']
     GAMMA = 0.999
     EPS_START = 0.9
     EPS_END = 0.05
-    EPS_DECAY = 200
+    EPS_DECAY = 100
     TARGET_UPDATE = pars['tg']
     nrf = pars['nrf']
 
@@ -581,10 +592,10 @@ def main(pars):
     optimizer2 = optim.Adam(policy_net2.parameters())
     memory2 = ReplayMemory(10000)
 
-    if args.results_path:
-        if not os.path.exists(args.results_path):
-            os.makedirs(args.results_path)
-        result_path =  args.results_path
+    if pars['results_path']:
+        if not os.path.exists(pars['results_path']):
+            os.makedirs(pars['results_path'])
+        result_path =  pars['results_path']
     result_path = result_path + '/results_' + str(0) + '.csv'
     result_out = open(result_path, 'w')
     csv_meta = '#' + json.dumps(pars) + '\n'    
@@ -596,6 +607,8 @@ def main(pars):
     num_episodes = pars['numep']
     done = False
     for i_episode in range(num_episodes):
+        if job.stopEx:
+            return
         # Initialize the environment and state
         env.reset()
         last_screen = get_screen()
@@ -604,6 +617,8 @@ def main(pars):
         rt = 0; ac=[]
         start_time = time.time()
         buf1= [];buf2= []; retime=[]; ep1=[]
+        if i_episode%500==0:
+            pars['epsteps'] = min(100, pars['epsteps']+10)
         for t in range(pars['epsteps']):# count():
             # Select and perform an action
             action1 = select_action(mark(state), 0, policy_net1)
@@ -614,8 +629,8 @@ def main(pars):
             ac.append(str(action1.item()))
 
             #ep1.append([env.render_env(), action.item(), reward])
-            reward1 = torch.tensor([reward1], device=device)
-            reward2 = torch.tensor([reward2], device=device)
+            reward1 = torch.tensor([reward1*pars['alpha']+reward2*(1-pars['alpha'])], device=device)
+            reward2 = torch.tensor([reward2*pars['alpha']+reward1*(1-pars['alpha'])], device=device)
             id1 = torch.tensor([0], device=device)
             id2 = torch.tensor([1], device=device)
 
@@ -649,7 +664,9 @@ def main(pars):
             ep = []
             rt1=0
             env.reset()
-            for t in range(pars['epsteps']):# count():
+            policy_net1.eval()
+            policy_net2.eval()
+            for t in range(100):#pars['epsteps']):# count():
                 # Select and perform an action
                 state = get_screen()
                 action1 = takeAc(mark(state), 0, policy_net1)# policy_net(mark(state), torch.tensor([0], device=device)).max(1)[1].view(1, 1)
@@ -660,7 +677,12 @@ def main(pars):
                 ep.append([env.render_env(), [action1.item(), action2.item()], [reward1, reward2]])
                 #print(env.render_env().shape)
                 rt1+=reward1+reward2;
+            job.log({'reward':rt1,'ep':i_episode})
+            experiment.set_step(i_episode)
+            experiment.log_metric("reward", rt1)
             save_episode_and_reward_to_csv(result_out, writer, i_episode, rt1, ep)
+            policy_net1.train()
+            policy_net2.train()
             print( 'reward test', rt1)
         # Update the target network, copying all weights and biases in DQN
         if i_episode % TARGET_UPDATE == 0:
@@ -697,17 +719,42 @@ todo:
 '''
 
 if __name__ == '__main__': 
+    if False:
+        args = getA()
+        pars = vars(args)    
+        print(pars)
 
-    args = getA()
-    pars = vars(args)    
-    print(pars)
+        env = GameEnv(pars['subhid'])
+        env.reset()
+
+        temp = env.render_env()
+        env.reset()
+
+        e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
+        print(e.shape, np.amax(e), np.amin(e))
+        main(pars)
     
-    env = GameEnv(pars['subhid'])
-    env.reset()
+    if True:
+        args = getA()
+        pars = vars(args)    
+        print(pars)
+        pars['results_path'] += pars['name']
+        #pars['results_path'] += pars['name']
+        env = None
+        
+        experiment = Experiment(api_key="ubnNI8IwcycXWmKD7eT7YlP4J", auto_output_logging=None,auto_metric_logging=False,
+                        disabled=pars['debug'] == '1',
+                        project_name="general", workspace="ionmosnoi")
+        
+        experiment.log_parameters(pars)
+        #temp = env.render_env()
+        #env.reset()
 
-    temp = env.render_env()
-    env.reset()
-
-    e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
-    print(e.shape, np.amax(e), np.amin(e))
-    main(pars)
+        #e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
+        #print(e.shape, np.amax(e), np.amin(e))
+        job.setName(pars['name'])
+        if True or pars['debug'] == '1':
+            job.debug()
+        main(pars)
+    else:
+        job.waitTask(main)

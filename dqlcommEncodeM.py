@@ -813,7 +813,7 @@ if __name__ == '__main__':
         #e = get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy()
         #print(e.shape, np.amax(e), np.amin(e))
         job.setName(pars['name'])
-        if True or pars['debug'] == '1':
+        if False and pars['debug'] == '1':
             job.debug()
         main(pars)
     else:
