@@ -276,12 +276,26 @@ class GameEnv:
 
     def render_env_1d(self, ag=None):
         a = []
+        dy = 0
+        dx = 0
         if ag is not None and ag==1:
-            a.extend([self.agent2.y , self.agent2.x, self.agent1.y , self.agent1.x])
+            dx=30
+            dy=10
+            a.extend([abs(dy-self.agent2.y) -5.5, abs(dx-self.agent2.x)- 15.5, self.agent1.y -5.5, self.agent1.x- 15.5])
         else:            
-            a.extend([self.agent1.y , self.agent1.x, self.agent2.y , self.agent2.x])
+            a.extend([self.agent1.y -5.5, self.agent1.x- 15.5, self.agent2.y -5.5, self.agent2.x- 15.5])
+        b = np.array(a[:])
+        c = np.zeros((4))+100
+        a.append(a[2]-a[0])
+        a.append(a[3]-a[1])
         for food in self.food_objects:
-            a.extend([food.y , food.x , 1 if food.is_hidden() else 0] )
+            a.extend([abs(dy-food.y) -5.5, abs(dx-food.x)- 15.5 , 1 if food.is_hidden() else -1] )
+            if False and not food.is_hidden():
+                b1 = np.abs(b-np.array((a[-3:-1]+a[-3:-1])))
+                c = np.where(b1<np.abs(c), b-(a[-3:-1]+a[-3:-1]), c)
+            a.append(food.y-a[0])
+            a.append(food.x-a[1])
+        #a.extend(c.tolist())
         return np.array(a)
     def render_env(self, ag=None):
         a = self.contribute_metrix(ag=ag)

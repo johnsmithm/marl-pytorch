@@ -162,8 +162,8 @@ class Agent:
         self.steps_done = 0
         self.num_episodes = pars['numep']
     def build(self):
-        self.policy_net = DQN(43).to(self.device)
-        self.target_net = DQN(43).to(self.device)
+        self.policy_net = DQN(71).to(self.device)
+        self.target_net = DQN(71).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         
@@ -397,7 +397,7 @@ def pbt(pars, nrenvs=1, job=None, experiment=None, num_workers = 5):
 
 def train(agent, pars):
     for epoch in range(1, pars['epochs'] + 1):
-        if epoch%4==0:
+        if epoch%3==0:
             pars['epsteps'] = min(100, pars['epsteps']+10)
             agent.pars['epsteps'] = pars['epsteps']
         agent.train(pars['numep'])
