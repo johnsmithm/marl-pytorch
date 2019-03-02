@@ -169,7 +169,8 @@ class Agent:
         
         self.optimizer = optim.SGD(
                     self.policy_net.parameters(), lr=self.pars['lr'], 
-                    momentum=self.pars['momentum'])#optim.Adam(self.policy_net.parameters())
+                    momentum=self.pars['momentum'])#
+        self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
     def optimize_model(self ):
         if len(self.memory) < self.BATCH_SIZE:
@@ -394,6 +395,16 @@ def pbt(pars, nrenvs=1, job=None, experiment=None, num_workers = 5):
         worker.result_out.close()
         worker.perturb_learning_rate(i_episode='last', nolast=False)
 
+def train(agent, pars):
+    for epoch in range(1, pars['epochs'] + 1):
+        if epoch%4==0:
+            pars['epsteps'] = min(100, pars['epsteps']+10)
+            agent.pars['epsteps'] = pars['epsteps']
+        agent.train(pars['numep'])
+        print('epoch', epoch)
+        agent.test(i_episode=pars['numep']*epoch)
+    agent.save()
+    agent.result_out.close()
         
 if __name__ == '__main__': 
     from htuneml1 import Job
@@ -417,11 +428,10 @@ if __name__ == '__main__':
             job.debug()
         else:
             job=None#job.makeExperiment(pars['name'], pars)
-        if True:
+        if False:
             pbt(pars, nrenvs=1, job=job, experiment=experiment, num_workers = pars['workers'])
         else:
             agent = Agent('1', pars, nrenvs=1, job=job, experiment=experiment)
-            agent.train(100)
-            agent.train(100)
+            train(agent, pars)
     else:
         job.waitTask(main)
