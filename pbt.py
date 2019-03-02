@@ -230,7 +230,7 @@ class Agent:
     def train(self, num_episodes): 
         
         for i_episode in range(num_episodes):
-            if job.stopEx:
+            if job is not None and job.stopEx:
                 return
             
             for env in self.envs:
@@ -281,14 +281,15 @@ class Agent:
                                [comm1.max(1)[1].item(), comm1.max(1)[1].item()]])
                     rt1+=reward1+reward2
             rs.append(rt1)
+        rm = np.mean(rs)
         if log and i_episode>0:
             if self.job is not None:
-                    self.job.log({'reward'+self.name:rt1,'ep':i_episode})
+                    self.job.log({'reward'+self.name:rm,'ep':i_episode})
             if self.experiment is not None:
                     self.experiment.set_step(i_episode)
-                    self.experiment.log_metric("reward"+self.name, rt1)
+                    self.experiment.log_metric("reward"+self.name, rm)
             save_episode_and_reward_to_csv(self.result_out, self.writer, i_episode, rt1, ep, self.name)
-        rm = np.mean(rs)
+        
         print( 'reward test', rm, rs)
         self.policy_net.train()
         return rm
@@ -415,7 +416,7 @@ if __name__ == '__main__':
         if pars['debug'] == '1':
             job.debug()
         else:
-            job.makeExperiment(pars['name'], pars)
+            job=None#job.makeExperiment(pars['name'], pars)
         if True:
             pbt(pars, nrenvs=1, job=job, experiment=experiment, num_workers = pars['workers'])
         else:
