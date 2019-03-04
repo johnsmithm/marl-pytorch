@@ -166,14 +166,28 @@ class GameEnv:
         self.agent2_beam_set = []
 
         self.food_objects = []
-
+        a1 = np.zeros((5,5),dtype=np.int32)-1
+        self.m1 = []
+        self.m2 = []
         for x in range(13, 18):
             delta = x - 13 if x -13 < 17 - x else 17 -x
             self.food_objects.append(FoodObj(coordinates=(x, 5)))
+            a1[x-13,5-3] = len(self.food_objects)-1
             for i in range(delta):
                 self.food_objects.append(FoodObj(coordinates=(x, 4 - i)))
+                a1[x-13,4-i-3] = len(self.food_objects)-1
                 self.food_objects.append(FoodObj(coordinates=(x, 6 + i)))
-
+                a1[x-13,6+i-3] = len(self.food_objects)-1
+        for i in a1:
+            for j in i:
+                if j >=0:
+                    self.m1.append(j)
+        for i in a1[::-1]:
+            for j in i[::-1]:
+                if j >=0:
+                    self.m2.append(j)
+        #print(self.m1, self.m2)
+                
     def move(self, agent1_action, agent2_action):
         assert agent1_action in range(8), 'agent1 take wrong action'
         assert agent2_action in range(8), 'agent2 take wrong action'
@@ -288,7 +302,11 @@ class GameEnv:
         c = np.zeros((4))+100
         a.append(a[2]-a[0])
         a.append(a[3]-a[1])
-        for food in self.food_objects:
+        m = self.m2 if  ag is not None and ag==1 else self.m1
+        #for food in self.food_objects:
+        for i in m:
+            food= self.food_objects[i]
+            #print(food.x,food.y)
             a.extend([abs(dy-food.y) -5.5, abs(dx-food.x)- 15.5 , 1 if food.is_hidden() else -1] )
             if False and not food.is_hidden():
                 b1 = np.abs(b-np.array((a[-3:-1]+a[-3:-1])))
