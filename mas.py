@@ -292,12 +292,14 @@ class GameEnv:
         a = []
         dy = 0
         dx = 0
+        vx = 15.5
+        vy = 5.5
         if ag is not None and ag==1:
             dx=30
             dy=10
-            a.extend([abs(dy-self.agent2.y) , abs(dx-self.agent2.x), abs(dy-self.agent1.y) , abs(dx-self.agent1.x)])
+            a.extend([abs(dy-self.agent2.y)-vy , abs(dx-self.agent2.x)-vx, abs(dy-self.agent1.y)-vy, abs(dx-self.agent1.x)-vx])
         else:            
-            a.extend([self.agent1.y , self.agent1.x, self.agent2.y , self.agent2.x])
+            a.extend([self.agent1.y -vy, self.agent1.x-vx, self.agent2.y-vy , self.agent2.x-vx])
         b = np.array(a[:])
         c = np.zeros((4))+100
         a.append(a[2]-a[0])
@@ -307,7 +309,7 @@ class GameEnv:
         for i in m:
             food= self.food_objects[i]
             #print(food.x,food.y)
-            a.extend([abs(dy-food.y) , abs(dx-food.x) , 1 if food.is_hidden() else -1] )
+            a.extend([abs(dy-food.y)-vy , abs(dx-food.x) -vx, 1 if food.is_hidden() else -1] )
             if False and not food.is_hidden():
                 b1 = np.abs(b-np.array((a[-3:-1]+a[-3:-1])))
                 c = np.where(b1<np.abs(c), b-(a[-3:-1]+a[-3:-1]), c)
