@@ -96,7 +96,7 @@ def pbt(pars, nrenvs=1, job=None, experiment=None, num_workers = 5):
     for epoch in range(1, pars['epochs'] + 1):
         performances = []
         for idx, worker in enumerate(workers):
-            print('Worker %s' % idx, worker.pars['epsteps'])
+            print('epoch:',epoch,',Worker %s' % idx, worker.pars['epsteps'])
             worker.train(pars['numep'])
             performance = worker.test(i_episode=pars['numep']*epoch)
             performances.append(performance)

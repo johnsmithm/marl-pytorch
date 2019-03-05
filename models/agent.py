@@ -103,7 +103,7 @@ class Agent:
         comm = policy_net(state1_batch, 1, mes)[self.idC] if np.random.rand()<self.prob else mes
         if self.pars['comm'] =='2':
             comm = comm.detach()
-        state_action_values = policy_net(state_batch, 1, comm.detach())[0].gather(1, action_batch)
+        state_action_values = policy_net(state_batch, 1, comm)[0].gather(1, action_batch)
 
         next_state_values = target_net(non_final_next_states, 1, mes)[0].max(1)[0].detach()
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch.float()
@@ -128,13 +128,15 @@ class Agent:
             return torch.tensor([[random.randrange(4)]], device=self.device, dtype=torch.long)
     
     def getaction(self, state1, state2, test=False):
-        mes = torch.tensor([[0,0,0,0]], device=self.device)
-        comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
-        comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+        mes = torch.tensor([[0,0,0,0]], device=self.device)            
         if test:
+            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() 
+            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() 
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else:
+            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
             action1 = self.select_action(state1, comm2, self.policy_net)
             action2 = self.select_action(state2,  comm1, self.policy_net)
         return action1, action2, [comm1, comm2]
@@ -252,6 +254,7 @@ class Agent:
         state_dict = agent.optimizer.state_dict()
         self.optimizer.load_state_dict(state_dict)
         self.EPS_DECAY = agent.EPS_DECAY
+        self.prob = agent.prob
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
 class AgentSep1D(Agent):
