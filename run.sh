@@ -1,0 +1,2 @@
+python pbt.py --numep 200 --alpha 1 --show 50 --bs 30 --results_path logs/ --name pbtdqnsharedcommQ2dv1 --debug 0 --comm 1 --epsteps 50 --epochs  30    --workers 3
+#python pbt.py --numep 50 --alpha 1 --show 50 --bs 30 --results_path logs/ --name pbtdqnsharedcommQ2dv1 --debug 1 --comm 1 --epsteps 50 --epochs  30    --workers 2
