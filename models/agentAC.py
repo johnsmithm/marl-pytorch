@@ -128,6 +128,8 @@ class AgentACShare1D(Agent):
             if self.eps_threshold<0:
                 self.eps_threshold = 0.00001
             self.EPS_DECAY += np.random.normal(scale=50.0)
+            if self.EPS_DECAY<50:
+                self.EPS_DECAY = 50
             if self.prob>=0:
                 self.prob += np.random.normal(scale=0.05)-0.025
                 self.prob = min(max(0,self.prob),1)

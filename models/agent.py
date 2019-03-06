@@ -135,8 +135,8 @@ class Agent:
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else:
-            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
-            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() #if np.random.rand()<self.prob else mes
+            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() #if np.random.rand()<self.prob else mes
             action1 = self.select_action(state1, comm2, self.policy_net)
             action2 = self.select_action(state2,  comm1, self.policy_net)
         return action1, action2, [comm1, comm2]
@@ -235,7 +235,9 @@ class Agent:
         if nolast:
             new_lr_factor = 10**np.random.normal(scale=1.0)
             new_momentum_delta = np.random.normal(scale=0.1)
-            self.EPS_DECAY += np.random.normal(scale=50.0)
+            self.EPS_DECAY += np.random.normal(scale=50.0)            
+            if self.EPS_DECAY<50:
+                self.EPS_DECAY = 50
             if self.prob>=0:
                 self.prob += np.random.normal(scale=0.05)-0.025
                 self.prob = min(max(0,self.prob),1)
@@ -256,6 +258,7 @@ class Agent:
         self.EPS_DECAY = agent.EPS_DECAY
         self.prob = agent.prob
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.memory = agent.memory#copy not pointer??
         
 class AgentSep1D(Agent):
     def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):
@@ -320,6 +323,8 @@ class AgentSep1D(Agent):
             new_lr_factor = 10**np.random.normal(scale=1.0)
             new_momentum_delta = np.random.normal(scale=0.1)
             self.EPS_DECAY += np.random.normal(scale=50.0)
+            if self.EPS_DECAY<50:
+                self.EPS_DECAY = 50
             if self.prob>=0:
                 self.prob += np.random.normal(scale=0.05)-0.025
                 self.prob = min(max(0,self.prob),1)
@@ -332,10 +337,6 @@ class AgentSep1D(Agent):
         if nolast:
             new_lr_factor = 10**np.random.normal(scale=1.0)
             new_momentum_delta = np.random.normal(scale=0.1)
-            self.EPS_DECAY += np.random.normal(scale=50.0)
-            if self.prob>=0:
-                self.prob += np.random.normal(scale=0.05)-0.025
-                self.prob = min(max(0,self.prob),1)
         for param_group in self.optimizer2.param_groups:
             if nolast:
                 param_group['lr'] *= new_lr_factor
@@ -358,4 +359,5 @@ class AgentSep1D(Agent):
         self.target_net1.load_state_dict(self.policy_net1.state_dict())
         self.target_net2.load_state_dict(self.policy_net2.state_dict())
         self.EPS_DECAY = agent.EPS_DECAY
+        self.memory = agent.memory#copy not pointer??
  
