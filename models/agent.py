@@ -74,6 +74,7 @@ class Agent:
         self.num_episodes = pars['numep']
         self.lr = pars['lr']
         self.momentum = pars['momentum']
+        self.maxR = 0
     def build(self):
         self.policy_net = DQN(71, self.pars).to(self.device)
         self.target_net = DQN(71, self.pars, self.pars).to(self.device)
@@ -87,6 +88,10 @@ class Agent:
         if self.pars['momentum']<0:
             self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
+        if self.pars['load'] is not None:
+            self.load(self.pars['load'])
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+            print('loaded')
     def optimize_model(self , policy_net, target_net, memory, optimizer):
         if len(memory) < self.BATCH_SIZE:
             return
@@ -214,7 +219,10 @@ class Agent:
                     self.experiment.set_step(i_episode)
                     self.experiment.log_metric("reward"+self.name, rm)
             save_episode_and_reward_to_csv(self.result_out, self.writer, i_episode, rt1, ep, self.name, self.pars)
-        
+            if rm > self.maxR:
+                self.maxR = rm
+                self.save()
+                print('saved')
         print( 'reward test', rm, rs)
         #self.policy_net.train()
         return rm
@@ -227,9 +235,10 @@ class Agent:
             self.target_net.load_state_dict(self.policy_net.state_dict())
             
     def save(self):
-        torch.save(self.policy_net.state_dict(), pars['results_path']+self.name+'/model')
+        torch.save(self.policy_net.state_dict(), self.pars['results_path']+self.name+'/model')
     def load(self, PATH):
-        self.policy_net.load_state_dict(torch.load(PATH))        
+        #torch.cuda.is_available()
+        self.policy_net.load_state_dict(torch.load(PATH, map_location= 'cuda' if torch.cuda.is_available() else 'cpu'))        
     
     def perturb_learning_rate(self, i_episode, nolast=True):
         if nolast:

@@ -54,13 +54,14 @@ def getA():
     parser.add_argument('-n', '--name', type=str, help='path to results directory', default='t3')
     parser.add_argument('-w', '--comm', type=str, help='0-no,2-Q,1-encoded', default='0')
     parser.add_argument('-e', '--en', type=int, help='0-no,1-Q,2-encoded', default=100)
-    parser.add_argument('-e1', '--h1', type=int, help='0-no,1-Q,2-encoded', default=100)
-    parser.add_argument('-e2', '--h2', type=int, help='0-no,1-Q,2-encoded', default=100)
-    parser.add_argument('-e12', '--lr', type=float, help='0-no,1-Q,2-encoded', default=0.01)
-    parser.add_argument('-e21', '--momentum', type=float, help='0-no,1-Q,2-encoded', default=0.5)
-    parser.add_argument('-e212', '--epochs', type=int, help='0-no,1-Q,2-encoded', default=5)
-    parser.add_argument('-e2122', '--workers', type=int, help='0-no,1-Q,2-encoded', default=5)
-    parser.add_argument('-e21212', '--model', type=int, help='sep2d,share2d,sep1d,share1d,', default=5)
+    parser.add_argument('-h1', '--h1', type=int, help='0-no,1-Q,2-encoded', default=100)
+    parser.add_argument('-h2', '--h2', type=int, help='0-no,1-Q,2-encoded', default=100)
+    parser.add_argument('-lr', '--lr', type=float, help='0-no,1-Q,2-encoded', default=0.01)
+    parser.add_argument('-mo', '--momentum', type=float, help='0-no,1-Q,2-encoded', default=0.5)
+    parser.add_argument('-ep', '--epochs', type=int, help='0-no,1-Q,2-encoded', default=5)
+    parser.add_argument('-wk', '--workers', type=int, help='0-no,1-Q,2-encoded', default=5)
+    parser.add_argument('-m', '--model', type=str, help='sep2d,share2d,sep1d,share1d', default='share2d')
+    parser.add_argument('-l', '--load', type=str, help='sep2d,share2d,sep1d,share1d,', default=None)
     args = parser.parse_args()
     
     return args   
@@ -89,7 +90,7 @@ class DeviationPbtAdvisor:
 def pbt(pars, nrenvs=1, job=None, experiment=None, num_workers = 5):
     pbt_advisor = DeviationPbtAdvisor(0)
     
-    workers = [AgentShare2D("{}".format(i), pars, nrenvs=nrenvs, job=job, experiment=experiment) for i in range(num_workers)]
+    workers = [getAgent("{}".format(i), pars, nrenvs=nrenvs, job=job, experiment=experiment) for i in range(num_workers)]
     for worker in workers:
         worker.perturb_learning_rate(0)
 
@@ -123,7 +124,12 @@ def train(agent, pars):
         agent.test(i_episode=pars['numep']*epoch)
     agent.save()
     agent.result_out.close()
-        
+
+def getAgent(name, pars, nrenvs, job, experiment):
+    cl = {'share2d':AgentShare2D, 
+          'share1dac':AgentACShare1D}
+    return cl[pars['model']](name, pars, nrenvs=nrenvs, job=job, experiment=experiment)
+
 if __name__ == '__main__': 
     from htuneml1 import Job
     job = Job('5c61b674203efd001a65d4b1')
@@ -146,10 +152,10 @@ if __name__ == '__main__':
             job.debug()
         else:
             job=None#job.makeExperiment(pars['name'], pars)
-        if True:
+        if pars['workers']>1:
             pbt(pars, nrenvs=1, job=job, experiment=experiment, num_workers = pars['workers'])
         else:
-            agent = AgentACShare1D('1', pars, nrenvs=1, job=job, experiment=experiment)
+            agent = getAgent('1', pars, nrenvs=1, job=job, experiment=experiment)
             train(agent, pars)
     else:
         job.waitTask(main)

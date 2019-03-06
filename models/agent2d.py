@@ -52,6 +52,7 @@ class AgentSep2D(AgentSep1D):
         self.optimizer2 = optim.Adam(self.policy_net2.parameters())
         self.memory2 = ReplayMemory(10000)
         self.memory1 = ReplayMemory(10000)
+        
     def getStates(self, env):
         screen1 = env.train_render().transpose((2, 0, 1))
         screen1 = np.ascontiguousarray(screen1, dtype=np.float32) / 255
@@ -71,6 +72,11 @@ class AgentShare2D(Agent):
                     momentum=self.pars['momentum'])#
         #self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
+        
+        if self.pars['load'] is not None:
+            self.load(self.pars['load'])
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+            print('loaded')
     def getStates(self, env):
         screen1 = env.train_render(0).transpose((2, 0, 1))
         screen1 = np.ascontiguousarray(screen1, dtype=np.float32) / 255
