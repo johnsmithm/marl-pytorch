@@ -280,7 +280,7 @@ class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree
                                    
             b_idx[i]= index
             
-            experience = [data]
+            experience = data
             
             memory_b.append(experience)
         
