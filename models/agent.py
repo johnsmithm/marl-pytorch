@@ -157,8 +157,8 @@ class Agent:
     def getaction(self, state1, state2, test=False):
         mes = torch.tensor([[0,0,0,0]], device=self.device)            
         if test:
-            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() 
-            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() 
+            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if 0<self.prob else mes
+            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if 0<self.prob else mes
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else:
