@@ -26,7 +26,7 @@ from torch.distributions import Categorical
 from models.models import DQN2D
 from models.agent import Agent, AgentSep1D
 
-from buffer import ReplayMemory
+from buffer import ReplayMemory, Memory
 
 class AgentSep2D(AgentSep1D):
     def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):
@@ -67,16 +67,20 @@ class AgentShare2D(Agent):
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()        
         
-        self.optimizer = optim.SGD(
+        if self.pars['momentum']>0:
+            self.optimizer = optim.SGD(
                     self.policy_net.parameters(), lr=self.pars['lr'], 
                     momentum=self.pars['momentum'])#
-        #self.optimizer = optim.Adam(self.policy_net.parameters())
+        if self.pars['momentum']<0:
+            self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
-        
+        print(1)
         if self.pars['load'] is not None:
             self.load(self.pars['load'])
             self.target_net.load_state_dict(self.policy_net.state_dict())
             print('loaded')
+        if 'ppe' in self.pars:
+            self.memory = Memory(10000)
     def getStates(self, env):
         screen1 = env.train_render(0).transpose((2, 0, 1))
         screen1 = np.ascontiguousarray(screen1, dtype=np.float32) / 255

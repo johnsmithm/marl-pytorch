@@ -1,2 +1,2 @@
-python pbt.py --numep 200 --alpha 1 --show 50 --bs 30 --results_path logs/ --name pbtdqnsharedcommE2dv2 --debug 0 --comm 2 --epsteps 50 --epochs  30    --workers 3
+python pbt.py --numep 200 --alpha 1 --show 50 --bs 30 --results_path logs1/ --name pbtdqnsharedv2 --debug 1 --comm 0 --epsteps 60 --epochs  30    --workers 3 --en 100 --ppe 1 --load logs1/pbtdqnsharedCommEv21/model
 #python pbt.py --numep 50 --alpha 1 --show 50 --bs 30 --results_path logs/ --name pbtdqnsharedcommQ2dv1 --debug 1 --comm 1 --epsteps 50 --epochs  30    --workers 2

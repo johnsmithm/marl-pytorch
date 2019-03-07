@@ -26,8 +26,10 @@ from torch.distributions import Categorical
 from models.models import DQN
 from mas import *
 
-from buffer import ReplayMemory,save_episode_and_reward_to_csv, Transition
+from buffer import ReplayMemory,save_episode_and_reward_to_csv, Transition, Memory
 
+def weighted_mse_loss(input, target, weight):
+    return torch.sum(weight * (input - target) ** 2)
 
 class Agent:
     def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):
@@ -46,7 +48,7 @@ class Agent:
         self.EPS_DECAY = 200
         self.TARGET_UPDATE = pars['tg']
         self.nrf = pars['nrf']            
-
+        self.capmem = 0
         self.prob = 0.5
         self.idC = 0
         if pars['comm'] =='0':
@@ -88,21 +90,35 @@ class Agent:
         if self.pars['momentum']<0:
             self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
+        if 'ppe' in self.pars:
+            self.memory = Memory(10000)
         if self.pars['load'] is not None:
             self.load(self.pars['load'])
             self.target_net.load_state_dict(self.policy_net.state_dict())
             print('loaded')
     def optimize_model(self , policy_net, target_net, memory, optimizer):
-        if len(memory) < self.BATCH_SIZE:
-            return
-        transitions = memory.sample(self.BATCH_SIZE)
-        batch = Transition(*zip(*transitions))
+        if self.pars['ppe']!='1' and  len(memory) < self.BATCH_SIZE:
+            return          
+        if self.pars['ppe']=='1' and self.capmem< self.BATCH_SIZE:
+            return          
         
-        non_final_next_states = torch.cat( batch.next_state)
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
-        state1_batch = torch.cat(batch.agent_index)
+        if self.pars['ppe']=='1':
+            #state1, action1, next_state1, reward1, state2
+            tree_idx, batch, ISWeights_mb = memory.sample(self.BATCH_SIZE)
+            non_final_next_states = torch.cat( [i[2] for i in batch])
+            state_batch = torch.cat( [i[0] for i in batch])
+            action_batch = torch.cat( [i[1] for i in batch])
+            reward_batch = torch.cat( [i[3] for i in batch])
+            state1_batch = torch.cat( [i[4] for i in batch])
+        else:
+            transitions = memory.sample(self.BATCH_SIZE)
+            batch = Transition(*zip(*transitions))
+            
+            non_final_next_states = torch.cat( batch.next_state)
+            state_batch = torch.cat(batch.state)
+            action_batch = torch.cat(batch.action)
+            reward_batch = torch.cat(batch.reward)
+            state1_batch = torch.cat(batch.agent_index)
 
         mes = torch.tensor([[0,0,0,0] for i in range(self.BATCH_SIZE)], device=self.device)
         comm = policy_net(state1_batch, 1, mes)[self.idC] if np.random.rand()<self.prob else mes
@@ -113,7 +129,13 @@ class Agent:
         next_state_values = target_net(non_final_next_states, 1, mes)[0].max(1)[0].detach()
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch.float()
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        #loss = weighted_mse_loss(state_action_values, expected_state_action_values.unsqueeze(1), 
+        #                         torch.tensor(ISWeights_mb, device=self.device))
+        #print(torch.tensor(ISWeights_mb, device=self.device).size())
 
+        if self.pars['ppe']=='1':
+            absolute_errors = (state_action_values-expected_state_action_values.unsqueeze(1)).abs().cpu().data.numpy().reshape((-1))
+            self.memory.batch_update(tree_idx, absolute_errors)
         # Optimize the model
         optimizer.zero_grad()
         loss.backward()
@@ -140,8 +162,8 @@ class Agent:
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else:
-            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() #if np.random.rand()<self.prob else mes
-            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() #if np.random.rand()<self.prob else mes
+            comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+            comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
             action1 = self.select_action(state1, comm2, self.policy_net)
             action2 = self.select_action(state2,  comm1, self.policy_net)
         return action1, action2, [comm1, comm2]
@@ -151,9 +173,13 @@ class Agent:
         return torch.from_numpy(screen1).unsqueeze(0).to(self.device), torch.from_numpy(screen2).unsqueeze(0).to(self.device)
     
     def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2):
-        
+            self.capmem+=2
+            if self.pars['ppe']!='1':
                     self.memory.push(state2, action2, next_state2, reward2, state1)
                     self.memory.push(state1, action1, next_state1, reward1, state2)
+            else:
+                    self.memory.store([state1, action1, next_state1, reward1, state2])
+                    self.memory.store([state2, action2, next_state2, reward2, state1])
     def optimize(self):
         self.optimize_model(self.policy_net, self.target_net, self.memory, self.optimizer)
     def train(self, num_episodes): 
@@ -267,7 +293,7 @@ class Agent:
         self.EPS_DECAY = agent.EPS_DECAY
         self.prob = agent.prob
         self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.memory = agent.memory#copy not pointer??
+        #self.memory = agent.memory#copy not pointer??
         
 class AgentSep1D(Agent):
     def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):

@@ -62,6 +62,7 @@ def getA():
     parser.add_argument('-wk', '--workers', type=int, help='0-no,1-Q,2-encoded', default=5)
     parser.add_argument('-m', '--model', type=str, help='sep2d,share2d,sep1d,share1d', default='share2d')
     parser.add_argument('-l', '--load', type=str, help='sep2d,share2d,sep1d,share1d,', default=None)
+    parser.add_argument('-pp', '--ppe', type=str, help='use priority replay buffer,', default='0')
     args = parser.parse_args()
     
     return args   
