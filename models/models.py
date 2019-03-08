@@ -76,4 +76,4 @@ class DQN2D(nn.Module):
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))#+z_a1.view(-1,32,1,1))
         x = F.relu(self.head(x.view(x.size(0), -1)))+z_a
-        return self.head1(x), F.relu(self.co1(x))
+        return self.head1(x), self.co1(x)

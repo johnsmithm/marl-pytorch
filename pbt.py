@@ -63,6 +63,7 @@ def getA():
     parser.add_argument('-m', '--model', type=str, help='sep2d,share2d,sep1d,share1d', default='share2d')
     parser.add_argument('-l', '--load', type=str, help='sep2d,share2d,sep1d,share1d,', default=None)
     parser.add_argument('-pp', '--ppe', type=str, help='use priority replay buffer,', default='0')
+    parser.add_argument('-envs', '--envs', type=int, help='use priority replay buffer,', default=1)
     args = parser.parse_args()
     
     return args   
@@ -127,8 +128,8 @@ def train(agent, pars):
     agent.result_out.close()
 
 def getAgent(name, pars, nrenvs, job, experiment):
-    cl = {'share2d':AgentShare2D, 
-          'share1dac':AgentACShare1D}
+    cl = {'share2d':AgentShare2D, 'share1d':Agent,
+          'share1dac':AgentACShare1D,'share2dac':AgentShare2D}
     return cl[pars['model']](name, pars, nrenvs=nrenvs, job=job, experiment=experiment)
 
 if __name__ == '__main__': 
@@ -154,9 +155,9 @@ if __name__ == '__main__':
         else:
             job=None#job.makeExperiment(pars['name'], pars)
         if pars['workers']>1:
-            pbt(pars, nrenvs=1, job=job, experiment=experiment, num_workers = pars['workers'])
+            pbt(pars, nrenvs=pars['envs'], job=job, experiment=experiment, num_workers = pars['workers'])
         else:
-            agent = getAgent('1', pars, nrenvs=1, job=job, experiment=experiment)
+            agent = getAgent('1', pars, nrenvs=pars['envs'], job=job, experiment=experiment)
             train(agent, pars)
     else:
         job.waitTask(main)

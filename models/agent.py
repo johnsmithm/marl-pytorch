@@ -78,8 +78,8 @@ class Agent:
         self.momentum = pars['momentum']
         self.maxR = 0
     def build(self):
-        self.policy_net = DQN(71, self.pars).to(self.device)
-        self.target_net = DQN(71, self.pars, self.pars).to(self.device)
+        self.policy_net = DQN(97, self.pars).to(self.device)
+        self.target_net = DQN(97, self.pars).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         
@@ -87,7 +87,7 @@ class Agent:
             self.optimizer = optim.SGD(
                     self.policy_net.parameters(), lr=self.pars['lr'], 
                     momentum=self.pars['momentum'])#
-        if self.pars['momentum']<0:
+        else:
             self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
         if 'ppe' in self.pars:
@@ -96,6 +96,8 @@ class Agent:
             self.load(self.pars['load'])
             self.target_net.load_state_dict(self.policy_net.state_dict())
             print('loaded')
+    def getComm(self, mes, policy_net,state1_batch):
+        return policy_net(state1_batch, 1, mes)[self.idC] if np.random.rand()<self.prob else mes
     def optimize_model(self , policy_net, target_net, memory, optimizer):
         if self.pars['ppe']!='1' and  len(memory) < self.BATCH_SIZE:
             return          
@@ -121,7 +123,7 @@ class Agent:
             state1_batch = torch.cat(batch.agent_index)
 
         mes = torch.tensor([[0,0,0,0] for i in range(self.BATCH_SIZE)], device=self.device)
-        comm = policy_net(state1_batch, 1, mes)[self.idC] if np.random.rand()<self.prob else mes
+        comm = self.getComm(mes, policy_net,state1_batch)
         if self.pars['comm'] =='2':
             comm = comm.detach()
         state_action_values = policy_net(state_batch, 1, comm)[0].gather(1, action_batch)
@@ -172,7 +174,7 @@ class Agent:
         screen2 = env.render_env_1d(1)#.transpose((2, 0, 1))
         return torch.from_numpy(screen1).unsqueeze(0).to(self.device), torch.from_numpy(screen2).unsqueeze(0).to(self.device)
     
-    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2):
+    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id):
             self.capmem+=2
             if self.pars['ppe']!='1':
                     self.memory.push(state2, action2, next_state2, reward2, state1)
@@ -187,8 +189,8 @@ class Agent:
         for i_episode in range(num_episodes):
             if self.job is not None and self.job.stopEx:
                 return
-            
-            for env in self.envs:
+            self.bufs = [[] for i in range(len(self.envs)*2)]
+            for env_id,env in enumerate(self.envs):
                 env.reset()
                 self.buf1 = []
                 self.buf2 = []
@@ -196,6 +198,7 @@ class Agent:
                 rt = 0; ac=[]
                 start_time = time.time()
                 buf1= [];buf2= []; ep1=[]
+                
                 for t in range(self.pars['epsteps']):
                 
                     action1, action2, _ = self.getaction(state1,state2)
@@ -207,14 +210,14 @@ class Agent:
                     reward2 = torch.tensor([reward2*self.alpha+reward1*(1-self.alpha)], device=self.device)
 
                     next_state1, next_state2 = self.getStates(env)
-                    self.saveStates(state1, state2, action1,action2, next_state1,next_state2, reward1,reward2)
+                    self.saveStates(state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id)
 
                     state1 = next_state1
                     state2 = next_state2
 
                     self.optimize()
                     self.updateTarget(i_episode, step=True)
-            if i_episode%10==0:
+            if i_episode%self.pars['show']==0:
                 print('ep',i_episode, 'reward train',rt, 'time', time.time() - start_time, ','.join(ac[:20]))            
             self.updateTarget(i_episode)
             
@@ -233,8 +236,8 @@ class Agent:
                     comm1,comm2 = r
                     reward1, reward2 = self.envs[0].move(action1.item(), action2.item())
                     ep.append([self.envs[0].render_env(), [action1.item(), action2.item()], [reward1, reward2],
-                               [comm1.cpu().data.numpy()[0].tolist(), comm1.cpu().data.numpy()[0].tolist()],
-                               [comm1.max(1)[1].item(), comm1.max(1)[1].item()]])
+                               [comm1.cpu().data.numpy()[0].tolist(), comm2.cpu().data.numpy()[0].tolist()],
+                               [comm1.max(1)[1].item(), comm2.max(1)[1].item()]])
                     rt1+=reward1+reward2
             rs.append(rt1)
         rm = np.mean(rs)
@@ -249,7 +252,7 @@ class Agent:
                 self.maxR = rm
                 self.save()
                 print('saved')
-        print( 'reward test', rm, rs)
+        print( 'reward test', rm, rs, 'com',comm1.cpu().data.numpy()[0].tolist())
         #self.policy_net.train()
         return rm
                       
@@ -334,7 +337,7 @@ class AgentSep1D(Agent):
         screen1 = env.render_env_1d()#.transpose((2, 0, 1))
         return torch.from_numpy(screen1).unsqueeze(0).to(self.device), torch.from_numpy(screen1).unsqueeze(0).to(self.device)
     
-    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2):
+    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id):
         
                     self.memory2.push(state2, action2, next_state2, reward2, state1)
                     self.memory1.push(state1, action1, next_state1, reward1, state2)

@@ -74,12 +74,12 @@ class AgentShare2D(Agent):
         if self.pars['momentum']<0:
             self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
-        print(1)
+        print(12)
         if self.pars['load'] is not None:
             self.load(self.pars['load'])
             self.target_net.load_state_dict(self.policy_net.state_dict())
             print('loaded')
-        if 'ppe' in self.pars:
+        if self.pars['ppe'] == '1':
             self.memory = Memory(10000)
     def getStates(self, env):
         screen1 = env.train_render(0).transpose((2, 0, 1))
