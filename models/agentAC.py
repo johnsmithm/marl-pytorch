@@ -193,7 +193,7 @@ class AgentACShare2D(AgentACShare1D):
     def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):
         Agent.__init__(self,name, pars, nrenvs, job, experiment)
     def build(self):
-        self.policy_net = DQN2D(84,84, self.pars).to(self.device)
+        self.policy_net = DQN2D(84,84, self.pars, rec=self.pars['rec']==1).to(self.device)
         self.q_net = DQN2D(84,84, self.pars).to(self.device)
         self.target_net = DQN2D(84,84, self.pars).to(self.device)
         self.target_net.load_state_dict(self.q_net.state_dict())
@@ -222,4 +222,46 @@ class AgentACShare2D(AgentACShare1D):
         screen2 = np.ascontiguousarray(screen2, dtype=np.float32) / 255
         return torch.from_numpy(screen1).unsqueeze(0).to(self.device), torch.from_numpy(screen2).unsqueeze(0).to(self.device) 
     
+class AgentACShareRec2D(AgentACShare2D):
+    def __init__(self, name, pars, nrenvs=1, job=None, experiment=None):
+        Agent.__init__(self,name, pars, nrenvs, job, experiment)
+        bs = 1
+        self.h2  = torch.zeros(1, bs, pars['en'], device=self.device)
+        self.h1  = torch.zeros(1, bs, pars['en'], device=self.device)
+    def select_action(self, state, comm, policy_net, h):
+        probs1, _, h1 = policy_net(state, 1, comm, h=h)#.cpu().data.numpy()
+        m = Categorical(logits=probs1)
+        action = m.sample()
+        return action.view(1, 1), m.log_prob(action), m.entropy(), h1
+    
+    def getComm(self, mes, policy_net, state1_batch, h):
+        return self.policy_net(state1_batch, 1, mes, h=h)[self.idC].detach() if np.random.rand()<self.prob else mes
+    
+    def getaction(self, state1, state2, test=False):
+        mes = torch.tensor([[0,0,0,0]], device=self.device)
+        #maybe error
+        comm2 = self.policy_net(state2, 0, mes)[self.idC] if (test and  0<self.prob) or np.random.rand()<self.prob else mes
+        comm1 = self.policy_net(state1, 0, mes, self.h1)[self.idC] if (test and  0<self.prob) or np.random.rand()<self.prob else mes
         
+        self.rnnS1.append([state1, state2, self.h1.detach(), comm1.detach()])
+        self.rnnS1 = self.rnnS1[-self.rnnB:]
+        self.rnnS2.append([state2, state1, self.h2.detach(), comm2.detach()])
+        self.rnnS2 = self.rnnS2[-self.rnnB:]
+        
+        action1, logp1, ent1, h1 = self.select_action(state1,  comm2, self.policy_net, self.h1)
+        action2, logp2, ent2, h2 = self.select_action(state2,  comm1, self.policy_net, self.h2)
+        self.rem =[logp1, ent1, logp2, ent2]
+        self.h2  = h2
+        self.h1  = h1
+        return action1, action2, [comm1, comm2]
+    def updateTarget(self, i_episode, step=False):
+        #soft_update(self.target_net, self.policy_net, tau=0.01)
+        if step:
+            return
+        self.optimize_policy(self.policy_net, self.bufs, self.policy_optimizer)        
+        bs = 1
+        self.h2  = torch.zeros(1, bs, self.pars['en'], device=self.device)
+        self.h1  = torch.zeros(1, bs, self.pars['en'], device=self.device)
+        if i_episode % self.TARGET_UPDATE == 0:
+            self.target_net.load_state_dict(self.q_net.state_dict())
+            self.eps_threshold -= 0.001

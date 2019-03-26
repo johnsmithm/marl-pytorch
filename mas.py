@@ -187,6 +187,21 @@ class GameEnv:
                 if j >=0:
                     self.m2.append(j)
         #print(self.m1, self.m2)
+    def getState(self):
+        a = [self.agent1.x, self.agent1.y, self.agent2.x, self.agent2.y]
+        for food in self.food_objects:
+            a.append(food.hidden )
+        return a
+    def getFrom(self, a):
+        
+        self.agent1 = AgentObj(coordinates=(a[0], a[1]), type=2, name='agent1')
+        self.agent2 = AgentObj(coordinates=(a[2], a[3]), type=0, name='agent2', direction=2)
+        self.agent1_actions = [self.agent1.move_forward, self.agent1.move_backward, self.agent1.move_left, self.agent1.move_right,
+                               self.agent1.turn_left, self.agent1.turn_right, self.agent1.beam, self.agent1.stay]
+        self.agent2_actions = [self.agent2.move_forward, self.agent2.move_backward, self.agent2.move_left, self.agent2.move_right,
+                               self.agent2.turn_left, self.agent2.turn_right, self.agent2.beam, self.agent2.stay]
+        for i,h in enumerate(a[4:]):
+            self.food_objects[i].hidden = h
                 
     def move(self, agent1_action, agent2_action):
         assert agent1_action in range(8), 'agent1 take wrong action'
@@ -309,14 +324,35 @@ class GameEnv:
         for i in m:
             food= self.food_objects[i]
             #print(food.x,food.y)
-            a.extend([abs(dy-food.y)-vy , abs(dx-food.x) -vx, 1 if food.is_hidden() else -1] )
+            a.extend([abs(dy-food.y)-vy , abs(dx-food.x) -vx, 1000 if food.is_hidden() else -1000] )
             if False and not food.is_hidden():
                 b1 = np.abs(b-np.array((a[-3:-1]+a[-3:-1])))
                 c = np.where(b1<np.abs(c), b-(a[-3:-1]+a[-3:-1]), c)
-            a.append(abs(dy-food.y)-a[0])
-            a.append(abs(dx-food.x)-a[1])
+            a.append((food.y-a[0]) if not food.is_hidden() else 1000)
+            a.append((food.x-a[1]) if not food.is_hidden() else 1000)
+            a.append((food.y-a[2]) if not food.is_hidden() else 1000)
+            a.append((food.x-a[3]) if not food.is_hidden() else 1000)
         #a.extend(c.tolist())
         return np.array(a)
+    def render_env_5x5(self, ag=None):
+        a = self.contribute_metrix(ag=ag)
+        if ag is not None and ag==1:
+            x = max(0,30-self.agent2.x-1)
+            y = max(0,10-self.agent2.y-2)
+            
+        else:          
+            
+            x = max(0,self.agent1.x-1)
+            y = max(0,self.agent1.y-2)
+        if True:
+            #print(x,y)
+            b = a[y:y+5,x:x+5]
+            
+            if b.shape[0] != 5 or b.shape[1]!=5:
+                #print(b.shape, a.shape, x,y, ag)
+                b = np.pad(b, ((0, 5-b.shape[0]), (0, 5-b.shape[1]),(0,0)), 'constant')
+            return b
+            
     def render_env(self, ag=None):
         a = self.contribute_metrix(ag=ag)
         sc = 1

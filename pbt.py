@@ -16,11 +16,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
-import argparse, shutil
+import argparse, shutil 
 
 from models.agent import Agent 
-from models.agent2d import AgentShare2D
-from models.agentAC import AgentACShare1D
+from models.agent2d import AgentShare2D, AgentSep2D, AgentShareRec2D, AgentShareRec1D, Agent2DDecomposeQ, AgentSep2DMessQ
+from models.agentAC import AgentACShare1D, AgentACShareRec2D
+from models.ppo import AgentPPOShare2D
 
 import time, os, datetime, json
 import copy, argparse, csv, json, datetime, os
@@ -64,6 +65,11 @@ def getA():
     parser.add_argument('-l', '--load', type=str, help='sep2d,share2d,sep1d,share1d,', default=None)
     parser.add_argument('-pp', '--ppe', type=str, help='use priority replay buffer,', default='0')
     parser.add_argument('-envs', '--envs', type=int, help='use priority replay buffer,', default=1)
+    parser.add_argument('-at', '--att', type=int, help='use priority replay buffer,', default=10)
+    parser.add_argument('-rec', '--rec', type=int, help='use recurent nets', default=0)
+    parser.add_argument('-pr', '--pretrain', type=str, help='use one demonstration', default=None)
+    parser.add_argument('-cr', '--commr', type=int, help='use one demonstration', default=2)
+    parser.add_argument('-cra', '--comma', type=str, help='use one demonstration', default='no')
     args = parser.parse_args()
     
     return args   
@@ -128,7 +134,10 @@ def train(agent, pars):
     agent.result_out.close()
 
 def getAgent(name, pars, nrenvs, job, experiment):
-    cl = {'share2d':AgentShare2D, 'share1d':Agent,
+    cl = {'share2d':AgentShare2D, 'share1d':Agent, 'share2dacrec':AgentACShareRec2D,
+          'share1drec':AgentShareRec1D, 'share2ddeQ':Agent2DDecomposeQ,
+          'share2dmq':AgentSep2DMessQ,
+          'sep2d':AgentSep2D,'ppo':AgentPPOShare2D, 'shared2drec':AgentShareRec2D,
           'share1dac':AgentACShare1D,'share2dac':AgentShare2D}
     return cl[pars['model']](name, pars, nrenvs=nrenvs, job=job, experiment=experiment)
 
