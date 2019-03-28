@@ -243,6 +243,8 @@ class GameEnv:
         return agent1_reward, agent2_reward
 
     def contribute_metrix(self, ag=None):
+        if self.check_env_done():
+            self.reset()
         #print(self.size_y + 2, self.size_x)
         a = np.zeros([self.size_y + 2, self.size_x + 2, 3], dtype=np.float32)
         #a[1:-1, 1:-1, :] = 0

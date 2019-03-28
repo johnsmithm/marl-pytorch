@@ -24,8 +24,8 @@ from pathlib import Path
 from torch.distributions import Categorical
 
 from models.models import DQN
-from mas import *
-#from switch import *
+#from mas import *
+from switch import *
 
 from buffer import ReplayMemory,save_episode_and_reward_to_csv, Transition, Memory
 

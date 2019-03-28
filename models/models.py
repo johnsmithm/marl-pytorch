@@ -30,7 +30,7 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
 
         self.h1 = nn.Linear(inp+4, pars['h1']) 
-        #self.h2 = nn.Linear( pars['h1'], pars['h2']) 
+        self.h2 = nn.Linear( pars['h1'], pars['h2']) 
         self.q = nn.Linear( pars['h2'], 4) 
         self.c = nn.Linear( pars['h2'], 4) 
         if rec:
@@ -45,7 +45,7 @@ class DQN(nn.Module):
             x = x.view(b*s,x.size(2))
         x = torch.cat([x.float(),comm.float()],dim=-1)
         x = F.relu(self.h1(x))
-        #x = F.relu(self.h2(x))
+        x = F.relu(self.h2(x))
         if h is not None:
             if s==0:
                 s=1
