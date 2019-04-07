@@ -338,12 +338,12 @@ class GameEnv:
         a = self.contribute_metrix(ag=ag)
         if ag is not None and ag==1:
             x = max(0,30-self.agent2.x-1)
-            y = max(0,10-self.agent2.y-2)
+            y = max(0,10-self.agent2.y-1)
             
         else:          
             
             x = max(0,self.agent1.x-1)
-            y = max(0,self.agent1.y-2)
+            y = max(0,self.agent1.y-1)
         if True:
             #print(x,y)
             b = a[y:y+5,x:x+5]

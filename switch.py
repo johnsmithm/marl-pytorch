@@ -172,7 +172,7 @@ class GameEnv:
         self.reset()
 
     def reset(self, block_level=0):
-        self.agent1 = AgentObj(coordinates=(4, 2), type=2, name='agent1', direction=2)
+        self.agent1 = AgentObj(coordinates=(4, 2), type=2, name='agent1', direction=0)
         self.agent2 = AgentObj(coordinates=(30, 4), type=0, name='agent2', direction=2)
         self.agent1_actions = [self.agent1.move_forward, self.agent1.move_backward, self.agent1.move_left, self.agent1.move_right,
                                self.agent1.turn_left, self.agent1.turn_right, self.agent1.beam, self.agent1.stay]

@@ -24,17 +24,61 @@ from functools import partial
 from pathlib import Path
 from torch.distributions import Categorical
 
+
+
+class DRQN(nn.Module):
+    def __init__(self, input_shape, pars, num_actions=4, gru_size=512, bidirectional=False, body=None, device=None):
+        super(DRQN, self).__init__()
+        self.device = device
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+        self.gru_size = gru_size
+        self.bidirectional = bidirectional
+        self.num_directions = 2 if self.bidirectional else 1
+        feature_size = 128
+        self.body = nn.Linear(input_shape, feature_size)
+        self.gru = nn.GRU(feature_size, self.gru_size, num_layers=1, batch_first=True, bidirectional=bidirectional)
+        #self.fc1 = nn.Linear(self.body.feature_size(), self.gru_size)
+        self.fc2 = nn.Linear(self.gru_size, self.num_actions)
+        self.c = nn.Linear(self.gru_size, self.num_actions)
+        self.cin = nn.Linear( self.num_actions, feature_size)
+        
+    def forward(self, x, cin, hx=None):
+        batch_size = x.size(0)
+        sequence_length = x.size(1)
+        
+        x = x.view((-1,)+(self.input_shape,))
+        
+        #format outp for batch first gru
+        feats = self.body(x).view(batch_size, sequence_length, -1)
+        cfeats = self.cin(cin).view(batch_size, sequence_length, -1)
+        hidden = self.init_hidden(batch_size) if hx is None else hx
+        out, hidden = self.gru(feats+cfeats, hidden)
+        x = self.fc2(out)
+        
+
+        return x, hidden, self.c(out)
+        #return x
+
+    def init_hidden(self, batch_size):
+        return torch.zeros(1*self.num_directions, batch_size, self.gru_size, device=self.device, dtype=torch.float)
+    
+    def sample_noise(self):
+        pass
+
+
+
 class DQN(nn.Module):
 
     def __init__(self, inp, pars, rec=False):
         super(DQN, self).__init__()
-
+        self.pars= pars
         self.h1 = nn.Linear(inp+4, pars['h1']) 
         self.h2 = nn.Linear( pars['h1'], pars['h2']) 
         self.q = nn.Linear( pars['h2'], 4) 
         self.c = nn.Linear( pars['h2'], 4) 
         if rec:
-            self.gru = nn.GRU(pars['h2'], pars['h2'])
+            self.gru = nn.GRU(pars['h2'], pars['h2'], batch_first = True)
         
     def forward(self, x, agent_index, comm, h=None, steps=1):
         
@@ -50,9 +94,10 @@ class DQN(nn.Module):
             if s==0:
                 s=1
                 b = x.size(0)
-            x = x.view(b,s,-1).permute([1,0,2])
+            x = x.view(b,s,-1)#.transpose(1,0)
             x, hn = self.gru(x, h.view(1,b,-1))            
-            x = x[-1].view(b,-1)
+            #x = x[-1].view(b,-1)
+            x = x.contiguous().view(-1, self.pars['h2'])
             return self.q(x), self.c(x), hn
         return self.q(x), self.c(x)
     
@@ -114,7 +159,9 @@ class DQN2D(nn.Module):
             
             x, hn = self.gru(x, h.view(1,b,-1))
             
-            x = x[-1].view(b,-1)
+            #x = x[-1].view(b,-1)
+            #print(x.size())
+            x = x.view(-1, self.pars['en'])
             return self.head1(x), self.co1(x), hn
         else:
             x = F.relu(self.head(x.view(x.size(0), -1)))+z_a

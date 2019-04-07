@@ -127,8 +127,8 @@ class AgentShareRec2D(AgentShare2D):
             comm1 = self.policy_net(state1, 0, mes, self.h1)[self.idC].detach() if np.random.rand()<self.prob else mes
             action1,h1 = self.select_action(state1, comm2, self.policy_net, self.h1)
             action2,h2 = self.select_action(state2,  comm1, self.policy_net, self.h2)
-            self.rnnS1.append([state1,state2, self.h1.detach(),self.h2.detach(), comm2])
-            self.rnnS2.append([state2,state1, self.h2.detach(),self.h1.detach(), comm1])
+            self.rnnS1.append([state1,state2, self.h1.detach(),self.h2.detach(), comm2, action1])
+            self.rnnS2.append([state2,state1, self.h2.detach(),self.h1.detach(), comm1, action2])
         
         self.h2  = h2
         self.h1  = h1
@@ -144,9 +144,14 @@ class AgentShareRec2D(AgentShare2D):
         if i_episode % self.TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
             #self.eps_threshold -= 0.001
+    def getT(self, rnns, k):
+        t = []
+        for s in rnns:
+            t.extend([i[k] for i in s])
+        return t#bxs
     def getOpStates(self, rnns):        
-        s1 = torch.cat([i[0]for b in rnns for i in b]).view(self.BATCH_SIZE,self.rnnB, 3, 84,84)#sxbx 80x80x3
-        s2 = torch.cat([i[1] for b in rnns for i in b]).view(self.BATCH_SIZE,self.rnnB, 3, 84,84)#sxbx 80x80x3
+        s1 = torch.cat(self.getT(rnns, 0)).view(self.BATCH_SIZE,self.rnnB, 3, 84,84)#sxbx 80x80x3
+        s2 = torch.cat(self.getT(rnns, 1)).view(self.BATCH_SIZE,self.rnnB, 3, 84,84)#sxbx 80x80x3
         return s1,s2
     def optimize_model(self , policy_net, target_net, memory, optimizer):
         if self.pars['ppe']!='1' and  len(memory) < self.BATCH_SIZE:
@@ -177,7 +182,15 @@ class AgentShareRec2D(AgentShare2D):
         h1 = torch.cat([b[0][2] for b in rnns])#bx100
         h2 = torch.cat([b[0][3] for b in rnns])#bx100
         #print([len(b) for b in rnns])
-        c = torch.cat([i[4]  for b in rnns for i in b]).view(self.BATCH_SIZE*self.rnnB, 4)#sxbx4
+        c = torch.cat([i[4].float()  for b in rnns for i in b]).view(self.BATCH_SIZE*self.rnnB, 4)#sxbx4
+        a2 = torch.cat(self.getT(rnns, 5))#.view(self.BATCH_SIZE,self.rnnB).permute([1,0]).view(self.BATCH_SIZE*self.rnnB, 1)#sxbx1
+        r2 = torch.cat(self.getT(rnns, 6))#.view(self.BATCH_SIZE,self.rnnB).permute([1,0]).view(self.BATCH_SIZE*self.rnnB)#sxb
+        
+        #a2 = a1.view(self.BATCH_SIZE,self.rnnB).transpose(1,0)#
+        #print(a.size(),r.size())
+        a = a2.contiguous().view(-1, 1)
+        #r2 = r1.view(self.BATCH_SIZE,self.rnnB).transpose(1,0)
+        r = r2.contiguous().view(-1)#sxb
         s1, s2 = self.getOpStates(rnns)
         mes = torch.tensor([[[0,0,0,0] for i in range(self.BATCH_SIZE)] for j in range(self.rnnB)], device=self.device)#sxbx4
         #_, c, _ = policy_net(s2, 1, mes, h=h2)
@@ -215,11 +228,17 @@ class AgentShareRec2D(AgentShare2D):
         #if self.pars['comm'] =='2':
         #    comm = comm.detach()
         #state_action_values,_,hs11 = policy_net(state_batch, 1, comm, hs1)
-        state_action_values= probs1.gather(1, action_batch)
+        state_action_values= probs1.gather(1, a)
 
         next_state_values = target_net(non_final_next_states, 1, mes, hs1)[0].max(1)[0].detach()
-        expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch.float()
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        expected_state_action_values1 = (next_state_values * self.GAMMA) + reward_batch.float()
+        n_v = probs1[self.BATCH_SIZE:].max(1)[0].detach()*self.GAMMA + r[:-self.BATCH_SIZE].float()
+        #print(probs1.size(),n_v.size(), expected_state_action_values.size(),state_action_values.size(), r.size(),  probs1[:self.BATCH_SIZE].max(1)[0].size())
+        expected_state_action_values = torch.cat([ n_v, expected_state_action_values1])
+        #expected_state_action_values[:self.BATCH_SIZE*self.rnnB//2] = 0
+        #state_action_values[:self.BATCH_SIZE*self.rnnB//2] *= 0
+        loss = F.smooth_l1_loss(state_action_values[self.BATCH_SIZE*self.rnnB//2:],
+                                expected_state_action_values.unsqueeze(1)[self.BATCH_SIZE*self.rnnB//2:])
         #loss = weighted_mse_loss(state_action_values, expected_state_action_values.unsqueeze(1), 
         #                         torch.tensor(ISWeights_mb, device=self.device))
         #print(torch.tensor(ISWeights_mb, device=self.device).size())
@@ -240,8 +259,8 @@ class AgentShareRec1D(AgentShareRec2D):
         self.rnnB = 10
     
     def getOpStates(self, rnns):        
-        s1 = torch.cat([i[0]for b in rnns for i in b]).view(self.BATCH_SIZE,self.rnnB, 75)#sxbx 80x80x3
-        s2 = torch.cat([i[1] for b in rnns for i in b]).view(self.BATCH_SIZE,self.rnnB, 75)#sxbx 80x80x3
+        s1 = torch.cat(self.getT(rnns, 0)).view(self.BATCH_SIZE,self.rnnB, 75)#sxbx 80x80x3
+        s2 = torch.cat(self.getT(rnns, 1)).view(self.BATCH_SIZE,self.rnnB, 75)#sxbx 80x80x3
         return s1,s2
     def build(self):
         self.policy_net = DQN(75, self.pars, rec=self.pars['rec']==1).to(self.device)
@@ -529,7 +548,7 @@ class AgentShare2DDeMessQ(AgentSep2DMessQ):
             reward_batch = torch.cat(batch.reward)
             state1_batch = torch.cat(batch.agent_index)
         #print(comm.size())
-        mes = torch.tensor([[0,0,0,0] for i in range(self.BATCH_SIZE)], device=self.device)  
+        mes = torch.tensor([[0,0,0,0] for i in range(self.BATCH_SIZE)], device=self.device)  .float()
         q, me = policy_net(torch.cat([state_batch,state_batch,state1_batch,state1_batch]), 1, 
                            torch.cat([mes,comm,mes,comm1]))[:2]
         #q,_ = policy_net(state_batch, 1, comm)[:2]
@@ -547,12 +566,12 @@ class AgentShare2DDeMessQ(AgentSep2DMessQ):
                                                                  ]), 1, 
                                        torch.cat([comm1,mes,mes]))[:2]#.max(1)[0].detach()
         
-        next_state_values1 = next_state_mess[:self.BATCH_SIZE].max(1)[0].detach()
+        next_state_values1 = next_state_values[:self.BATCH_SIZE].max(1)[0].detach()
         next_state_values = next_state_values[self.BATCH_SIZE*1:self.BATCH_SIZE*2].max(1)[0].detach()
         next_state_mess1 = next_state_mess[self.BATCH_SIZE*2:self.BATCH_SIZE*3].max(1)[0].detach()
         next_state_mess = next_state_mess[self.BATCH_SIZE*3:self.BATCH_SIZE*4].max(1)[0].detach()
         
-        expected_state_action_values = ((next_state_values+next_state_mess+next_state_values1+next_state_mess1) * self.GAMMA) 
+        expected_state_action_values = ((next_state_values+next_state_mess+next_state_values1+next_state_mess1) * self.GAMMA) \
                                         + reward_batch.float()
         loss = F.smooth_l1_loss(state_action_values+state_mes_values+state_action_values1+state_mes_values1,
                                 expected_state_action_values.unsqueeze(1))
@@ -561,7 +580,7 @@ class AgentShare2DDeMessQ(AgentSep2DMessQ):
         #print(torch.tensor(ISWeights_mb, device=self.device).size())
 
         if self.pars['ppe']=='1':
-            absolute_errors = (state_action_values+state_mes_values-expected_state_action_values.unsqueeze(1)).abs().cpu().data.numpy().reshape((-1))
+            absolute_errors = (state_action_values+state_mes_values+state_action_values1+state_mes_values1-expected_state_action_values.unsqueeze(1)).abs().cpu().data.numpy().reshape((-1))
             memory.batch_update(tree_idx, absolute_errors)
         # Optimize the model
         if self.pars['att'] == 1:

@@ -24,8 +24,8 @@ from pathlib import Path
 from torch.distributions import Categorical
 
 from models.models import DQN
-#from mas import *
-from switch import *
+from mas import *
+#from switch import *
 
 from buffer import ReplayMemory,save_episode_and_reward_to_csv, Transition, Memory
 
@@ -188,7 +188,7 @@ class Agent:
             comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if 0<self.prob else mes
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
-        else:
+        else: 
             comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
             comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
             action1 = self.select_action(state1, comm2, self.policy_net)
@@ -205,6 +205,8 @@ class Agent:
                     self.memory.push(state2, action2, next_state2, reward2, state1)
                     self.memory.push(state1, action1, next_state1, reward1, state2)
             else:
+                    self.rnnS1[-1].append(reward1)
+                    self.rnnS2[-1].append(reward2)
                     if self.pars['rec']==1 and len(self.rnnS1)<self.rnnB:#always full steps
                         self.rnnS1 = [self.rnnS1[0]]*(self.rnnB-len(self.rnnS1)+1) + self.rnnS1
                         self.rnnS2 = [self.rnnS2[0]]*(self.rnnB-len(self.rnnS2)+1) + self.rnnS2
@@ -302,6 +304,7 @@ class Agent:
                 start_time = time.time()
                 buf1= [];buf2= []; ep1=[]
                 self.rnnS1 = [];self.rnnS2 = []
+                self.reset_hx()
                 for t in range(self.pars['epsteps']):
                 
                     action1, action2, _ = self.getaction(state1,state2)
@@ -313,7 +316,7 @@ class Agent:
                     reward2 = torch.tensor([reward2*self.alpha+reward1*(1-self.alpha)], device=self.device)
 
                     next_state1, next_state2 = self.getStates(env)
-                    self.saveStates(state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id)
+                    self.saveStates(state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id, t==self.pars['epsteps']-1)
 
                     state1 = next_state1
                     state2 = next_state2
@@ -336,6 +339,7 @@ class Agent:
             bs = 1
             self.h2  = torch.zeros(1, bs, self.pars['en'], device=self.device)
             self.h1  = torch.zeros(1, bs, self.pars['en'], device=self.device)
+            self.reset_hx()
             for t in range(100):#sep function
                     state1,state2 = self.getStates(self.envs[0])
                     action1, action2, r = self.getaction(state1,state2, test=True)
@@ -368,7 +372,8 @@ class Agent:
             return
         if i_episode % self.TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
-            
+    def reset_hx(self):
+        pass
     def save(self):
         torch.save(self.policy_net.state_dict(), self.pars['results_path']+self.name+'/model')
     def load(self, PATH):

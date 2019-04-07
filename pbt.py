@@ -22,6 +22,7 @@ from models.agent import Agent
 from models.agent2d import AgentShare2D, AgentSep2D, AgentShareRec2D, AgentShareRec1D, Agent2DDecomposeQ, AgentSep2DMessQ, AgentShare2DDeMessQ
 from models.agentAC import AgentACShare1D, AgentACShareRec2D
 from models.ppo import AgentPPOShare2D
+from models.rec import AgentDRQNShare1D, AgentDRQNShareDVMN1D, AgentDRQNShareDVMNz1D
 
 import time, os, datetime, json
 import copy, argparse, csv, json, datetime, os
@@ -137,6 +138,8 @@ def getAgent(name, pars, nrenvs, job, experiment):
     cl = {'share2d':AgentShare2D, 'share1d':Agent, 'share2dacrec':AgentACShareRec2D,
           'share1drec':AgentShareRec1D, 'share2ddeQ':Agent2DDecomposeQ,
           'share2dmq':AgentSep2DMessQ, 'shared2dDeM':AgentShare2DDeMessQ,
+          'shared1ddrqn':AgentDRQNShare1D, 'dvmnshared1ddrqn':AgentDRQNShareDVMN1D,
+          'mdvnrec':AgentDRQNShareDVMNz1D,
           'sep2d':AgentSep2D,'ppo':AgentPPOShare2D, 'shared2drec':AgentShareRec2D,
           'share1dac':AgentACShare1D,'share2dac':AgentShare2D}
     return cl[pars['model']](name, pars, nrenvs=nrenvs, job=job, experiment=experiment)
