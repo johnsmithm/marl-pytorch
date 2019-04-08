@@ -388,13 +388,15 @@ class AgentDRQNShareDVMNz1D(AgentDRQNShareDVMN1D):
                 a = a[:, -1, :] #select last element of seq
                 return self.getV(a, 4)
         else:
-            o = [-1 for i in range(4)]
+            o = [0 for i in range(4)]
             for i in range(2):
                 if np.random.rand()<0:
                     o[i] = 1
+                else:
+                    o[i] = -1
             return o
     def getI(self, c, i):
-        return 0 if c[0]<0 else 1
+        return 0 if c[i]<0 else 1
     def prep_minibatch(self):
         self.batch_size = self.BATCH_SIZE
         transitions, indices, weights = self.memory.sample(self.BATCH_SIZE)
