@@ -199,7 +199,7 @@ class Agent:
         screen2 = env.render_env_1d(1)#.transpose((2, 0, 1))
         return torch.from_numpy(screen1).unsqueeze(0).to(self.device), torch.from_numpy(screen2).unsqueeze(0).to(self.device)
     
-    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id):
+    def saveStates(self, state1, state2, action1,action2, next_state1,next_state2, reward1,reward2, env_id, t):
             self.capmem+=2
             if self.pars['ppe']!='1':
                     self.memory.push(state2, action2, next_state2, reward2, state1)

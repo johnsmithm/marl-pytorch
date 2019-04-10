@@ -390,7 +390,7 @@ class AgentDRQNShareDVMNz1D(AgentDRQNShareDVMN1D):
         else:
             o = [0 for i in range(4)]
             for i in range(2):
-                if np.random.rand()<0:
+                if np.random.rand()<0.5:
                     o[i] = 1
                 else:
                     o[i] = -1

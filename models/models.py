@@ -16,7 +16,7 @@ import torchvision.transforms as T
 import argparse, shutil
 
 from mas import *
-
+from models.att import MultiHeadAttention
 
 import time, os, datetime, json
 import copy, argparse, csv, json, datetime, os
@@ -131,6 +131,8 @@ class DQN2D(nn.Module):
             self.gru = nn.GRU(pars['en']*2, pars['en'])
         if pars['att'] ==1:
             self.att = nn.Linear(pars['en'], 1)
+        if pars['matt'] ==1:    
+            self.matt = MultiHeadAttention(n_head=4, d_model=100, d_k=4, d_v=4)
         #self.comm_lookup = nn.Embedding(5, 10)
         #self.agent_lookup1 = nn.Embedding(2, 32)
 
@@ -168,6 +170,10 @@ class DQN2D(nn.Module):
         if self.pars['att'] ==1:
             att = F.sigmoid(self.att(x))
             return self.head1(x), self.co1(x)*att,  att
+        if self.pars['matt'] ==1:    
+            x1 = x.view(-1,1, self.pars['en'])
+            output, attn = self.matt(x1, x1, x1)
+            self.head1(x), self.co1(output.view(-1, self.pars['en']))
         if self.pars['comma'] == 'no':
             return self.head1(x), self.co1(x)
         c = F.tanh(self.co1(x))
