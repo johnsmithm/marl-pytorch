@@ -132,7 +132,7 @@ class DQN2D(nn.Module):
         if pars['att'] ==1:
             self.att = nn.Linear(pars['en'], 1)
         if pars['matt'] ==1:    
-            self.matt = MultiHeadAttention(n_head=4, d_model=100, d_k=4, d_v=4)
+            self.matt = MultiHeadAttention(n_head=4, d_model=self.pars['en'], d_k=4, d_v=4)
         #self.comm_lookup = nn.Embedding(5, 10)
         #self.agent_lookup1 = nn.Embedding(2, 32)
 
@@ -173,7 +173,7 @@ class DQN2D(nn.Module):
         if self.pars['matt'] ==1:    
             x1 = x.view(-1,1, self.pars['en'])
             output, attn = self.matt(x1, x1, x1)
-            self.head1(x), self.co1(output.view(-1, self.pars['en']))
+            return self.head1(x), self.co1(output.view(-1, self.pars['en']))
         if self.pars['comma'] == 'no':
             return self.head1(x), self.co1(x)
         c = F.tanh(self.co1(x))

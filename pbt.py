@@ -68,6 +68,7 @@ def getA():
     parser.add_argument('-envs', '--envs', type=int, help='use priority replay buffer,', default=1)
     parser.add_argument('-at', '--att', type=int, help='use priority replay buffer,', default=10)
     parser.add_argument('-mat', '--matt', type=int, help='use priority replay buffer,', default=10)
+    parser.add_argument('-dru', '--dru', type=float, help='use priority replay buffer,', default=-0.1)
     parser.add_argument('-rec', '--rec', type=int, help='use recurent nets', default=0)
     parser.add_argument('-pr', '--pretrain', type=str, help='use one demonstration', default=None)
     parser.add_argument('-cr', '--commr', type=int, help='use one demonstration', default=2)

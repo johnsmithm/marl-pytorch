@@ -25,6 +25,7 @@ from torch.distributions import Categorical
 
 from models.models import DQN
 from mas import *
+from models.dru import DRU
 #from switch import *
 
 from buffer import ReplayMemory,save_episode_and_reward_to_csv, Transition, Memory
@@ -79,6 +80,7 @@ class Agent:
         self.lr = pars['lr']
         self.momentum = pars['momentum']
         self.maxR = 0
+        self.dru = DRU(0.2, comm_narrow=True, hard=False, device=self.device)
     def build(self):
         self.policy_net = DQN(97, self.pars, rec=self.pars['rec']==1).to(self.device)
         self.target_net = DQN(97, self.pars, rec=self.pars['rec']==1).to(self.device)
@@ -132,6 +134,8 @@ class Agent:
                 print(att.cpu().data.numpy()[:10,0])
         else:
             comm = self.getComm(mes, policy_net,state1_batch)
+        if self.pars['dru'] > 0:
+            comm = self.dru.forward(comm, True)
         if self.pars['comm'] =='2':
             comm = comm.detach()
             
@@ -186,11 +190,17 @@ class Agent:
         if test:
             comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if 0<self.prob else mes
             comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if 0<self.prob else mes
+            if self.pars['dru'] > 0:
+                comm1 = self.dru.forward(comm1, False)
+                comm2 = self.dru.forward(comm2, False)
             action1 = self.policy_net(state1, 1, comm2)[0].max(1)[1].view(1, 1)
             action2 = self.policy_net(state2, 1, comm1)[0].max(1)[1].view(1, 1)
         else: 
             comm2 = self.policy_net(state2, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
             comm1 = self.policy_net(state1, 0, mes)[self.idC].detach() if np.random.rand()<self.prob else mes
+            if self.pars['dru'] > 0:
+                comm1 = self.dru.forward(comm1, True)
+                comm2 = self.dru.forward(comm2, True)
             action1 = self.select_action(state1, comm2, self.policy_net)
             action2 = self.select_action(state2,  comm1, self.policy_net)
         return action1, action2, [comm1, comm2]
