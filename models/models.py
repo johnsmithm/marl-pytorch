@@ -16,7 +16,7 @@ import torchvision.transforms as T
 import argparse, shutil
 
 from mas import *
-from models.att import MultiHeadAttention
+from models.att import MultiHeadAttention, Attention
 
 import time, os, datetime, json
 import copy, argparse, csv, json, datetime, os
@@ -132,7 +132,17 @@ class DQN2D(nn.Module):
         if pars['att'] ==1:
             self.att = nn.Linear(pars['en'], 1)
         if pars['matt'] ==1:    
-            self.matt = MultiHeadAttention(n_head=4, d_model=self.pars['en'], d_k=4, d_v=4)
+            self.matt = MultiHeadAttention(n_head=4, d_model=62, d_k=16, d_v=16)
+        if pars['matt'] ==2:    
+            self.matt = MultiHeadAttention(n_head=8, d_model=pars['en'], d_k=32, d_v=32)
+        if pars['matt'] ==3 or pars['matt'] ==4:    
+            self.matt = Attention(encoder_dim=62, decoder_dim=4, attention_dim=60)
+            self.matt1 = Attention(encoder_dim=62, decoder_dim=62, attention_dim=60)
+            self.matt2 = Attention(encoder_dim=62, decoder_dim=4, attention_dim=30)
+            self.head1 = nn.Linear(62, 4) # 448 or 512
+            #self.up = nn.Linear(32, 62) # 448 or 512
+            self.co1 = nn.Linear(62, 4)
+            #self.co1 = nn.Linear(62, 4)
         #self.comm_lookup = nn.Embedding(5, 10)
         #self.agent_lookup1 = nn.Embedding(2, 32)
 
@@ -148,9 +158,38 @@ class DQN2D(nn.Module):
             x = x.view(b*s,x.size(2),x.size(3),x.size(4))
         #z_a1 = self.agent_lookup1(agent_index)
         x = F.relu(self.bn1(self.conv1(x)))#+z_a.view(-1,16,1,1))
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))#+z_a1.view(-1,32,1,1))
+        x2 = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x2)))#+z_a1.view(-1,32,1,1))
         
+        if self.pars['matt'] ==3:
+            x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
+            x4, self.attn1 = self.matt(x1, comm.float())
+            x3, self.attn2 = self.matt1(x1, x4)
+            #print(x2.size())
+            x5, self.attn = self.matt2(x2.permute(0,2,3,1).contiguous().view(-1, 19*19, 62), comm.float())
+            
+            #x5 = self.up(x)
+            #print(x.size())
+            return self.head1(x5+x3+x4), self.co1(x5+x3+x4)
+        if self.pars['matt'] ==4:
+            x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
+            x4, self.attn1 = self.matt(x1, comm.float())
+            x3, self.attn2 = self.matt1(x1, x4)
+            #print(x2.size())
+            x5, self.attn = self.matt2(x2.permute(0,2,3,1).contiguous().view(-1, 19*19, 62), comm.float())
+            
+            #x5 = self.up(x)
+            #print(x.size())
+            return self.head1(x5+x4), self.co1(x3)
+        
+        if self.pars['matt'] ==1:    
+            x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
+            x, self.attn = self.matt(x1, x1, x1)
+            #x = F.relu(self.head(x.view(x.size(0), -1)))+z_a
+            #print(output.size(), x.size())
+            #return self.head1(x), self.co1(output.view(-1, 62))
+            #x = output.view(-1, self.pars['en'])
+            
         if h is not None:
             #(seq_len, batch, input_size)
             x = torch.cat([F.relu(self.head(x.view(x.size(0), -1))),z_a],dim=-1)
@@ -170,11 +209,16 @@ class DQN2D(nn.Module):
         if self.pars['att'] ==1:
             att = F.sigmoid(self.att(x))
             return self.head1(x), self.co1(x)*att,  att
-        if self.pars['matt'] ==1:    
-            x1 = x.view(-1,1, self.pars['en'])
-            output, attn = self.matt(x1, x1, x1)
-            return self.head1(x), self.co1(output.view(-1, self.pars['en']))
+        if self.pars['matt'] ==2:    
+            x1 = x.view(-1, 1,  self.pars['en'])
+            output, self.attn = self.matt(x1, x1, x1)
+            #print(output.size(), x.size())
+            x = output.view(-1, self.pars['en'])
+            
+            
+            
         if self.pars['comma'] == 'no':
             return self.head1(x), self.co1(x)
         c = F.tanh(self.co1(x))
         return self.head1(x), where((c>0).float(), c+1, c-1 )#F.tanh(self.co1(x))
+    
