@@ -135,14 +135,20 @@ class DQN2D(nn.Module):
             self.matt = MultiHeadAttention(n_head=4, d_model=62, d_k=16, d_v=16)
         if pars['matt'] ==2:    
             self.matt = MultiHeadAttention(n_head=8, d_model=pars['en'], d_k=32, d_v=32)
-        if pars['matt'] ==3 or pars['matt'] ==4:    
+        if pars['matt'] in [3,4]:    
             self.matt = Attention(encoder_dim=62, decoder_dim=4, attention_dim=60)
             self.matt1 = Attention(encoder_dim=62, decoder_dim=62, attention_dim=60)
             self.matt2 = Attention(encoder_dim=62, decoder_dim=4, attention_dim=30)
             self.head1 = nn.Linear(62, 4) # 448 or 512
             #self.up = nn.Linear(32, 62) # 448 or 512
             self.co1 = nn.Linear(62, 4)
-            #self.co1 = nn.Linear(62, 4)
+        if pars['matt'] in [5,6]:    
+            self.matt = Attention(encoder_dim=62, decoder_dim=4, attention_dim=60)
+            self.matt1 = Attention(encoder_dim=62, decoder_dim=62, attention_dim=60)
+            self.matt2 = Attention(encoder_dim=62, decoder_dim=62, attention_dim=60)
+            self.head1 = nn.Linear(62, 4) # 448 or 512
+            #self.up = nn.Linear(32, 62) # 448 or 512
+            self.co1 = nn.Linear(62, 4)
         #self.comm_lookup = nn.Embedding(5, 10)
         #self.agent_lookup1 = nn.Embedding(2, 32)
 
@@ -175,6 +181,26 @@ class DQN2D(nn.Module):
             x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
             x4, self.attn1 = self.matt(x1, comm.float())
             x3, self.attn2 = self.matt1(x1, x4)
+            #print(x2.size())
+            x5, self.attn = self.matt2(x2.permute(0,2,3,1).contiguous().view(-1, 19*19, 62), comm.float())
+            
+            #x5 = self.up(x)
+            #print(x.size())
+            return self.head1(x5+x4), self.co1(x3)
+        if self.pars['matt'] ==5:
+            x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
+            x4, self.attn1 = self.matt(x1, comm.float())
+            x3, self.attn2 = self.matt1(x1, x4)
+            #print(x2.size())
+            x5, self.attn = self.matt2(x2.permute(0,2,3,1).contiguous().view(-1, 19*19, 62), x4)
+            
+            #x5 = self.up(x)
+            #print(x.size())
+            return self.head1(x5+x4), self.co1(x3)
+        if self.pars['matt'] ==6:
+            x1 = x.permute(0,2,3,1).contiguous().view(-1, 81, 62)
+            x4, self.attn1 = self.matt(x1, comm.float())
+            x3, self.attn2 = self.matt1(x1,  comm.float())
             #print(x2.size())
             x5, self.attn = self.matt2(x2.permute(0,2,3,1).contiguous().view(-1, 19*19, 62), comm.float())
             
